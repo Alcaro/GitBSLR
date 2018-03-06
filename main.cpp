@@ -1,13 +1,4 @@
-//GitBSLR - make Git follow symlinks
-//More specifically:
-//- Symlinks to anywhere inside the repo are still symlinks.
-//- Relative symlinks to outside the repository are inlined.
-//- Absolute symlinks are left alone, though they're not recommended.
-//- If following symlinks yields a loop (for example a link to the parent of the repo), the loop point is turned into a symlink.
-//- If multiple symlinks lead to outside the repo, you'll probably end up with duplicate files.
-//- Interaction with Git's cross-filesystem detector is untested.
-//- Submodules are untested.
-//- Unix only (only Linux tested), no Windows support (but symlinks barely work on Windows in the first place).
+#define INLINE_ABSOLUTE_LINKS 1
 
 #include "arlib.h"
 
@@ -22,11 +13,13 @@ typedef int (*chdir_t)(const char * path);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
 typedef struct dirent64* (*readdir64_t)(DIR* dirp);
+typedef int (*symlink_t)(const char *target, const char *linkpath);
 
 static chdir_t chdir_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
 static readdir64_t readdir64_o;
+static symlink_t symlink_o;
 
 
 static string readlink_d(cstring path)
@@ -53,18 +46,20 @@ again: ;
 // If that path should refer to a symlink, return what it points to (relative to the presumed link's parent directory).
 // If it doesn't exist, or shouldn't be a symlink, return a blank string.
 //The function may not call lstat or readlink, that'd yield infinite recursion. Instead, append _o and call that.
-
-//algorithm:
-//for each prefix of the path:
-// if path is the same thing as prefix:
-//  it's a link
-// if path is a link, and points to inside prefix:
-//  it's a link
-//otherwise, it's not a link
 static string resolve_symlink(cstring path)
 {
+	//algorithm:
+	//for each prefix of the path:
+	// if path is the same thing as prefix (st_dev/st_ino identical):
+	//  it's a link
+	// if path is a link, and points to inside prefix:
+	//  it's a link
+	//otherwise, it's not a link
+	
 	string path_linktarget = readlink_d(path);
+#if !INLINE_ABSOLUTE_LINKS
 	if (path_linktarget[0] == '/') return path_linktarget;
+#endif
 	
 	string path_abs = string::create_usurp(realpath(path.c_str(), NULL));
 	
@@ -108,6 +103,7 @@ __attribute__((constructor)) static void init()
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
+	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
 }
 
 
@@ -167,6 +163,22 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 	ssize_t nbytes = min(bufsiz, newpath.length());
 	memcpy(buf, newpath.bytes().ptr(), nbytes);
 	return nbytes;
+}
+
+DLLEXPORT int symlink(const char * target, const char * linkpath);
+DLLEXPORT int symlink(const char * target, const char * linkpath)
+{
+	string reporoot_abs = string::create_usurp(realpath(".", NULL));
+	string linkpath_abs = string::create_usurp(realpath(file::dirname(target)+linkpath, NULL));
+	if (reporoot_abs != linkpath_abs && !linkpath_abs.startswith(reporoot_abs))
+	{
+		errno = EPERM;
+		return -1;
+	}
+	else
+	{
+		return symlink_o(target, linkpath);
+	}
 }
 
 //I could keep track of what path this directory is for, or I could just tell Git that we don't know the filetype.

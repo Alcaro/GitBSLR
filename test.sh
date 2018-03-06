@@ -1,7 +1,8 @@
 #!/bin/bash
 
+cd $(dirname $0)
 make || exit $?
-rm -rf test/
+rm -rf test/ || exit $?
 [ -e test/ ] && exit 1
 mkdir test/ || exit $?
 
@@ -53,7 +54,9 @@ ln -sr test/expected/to_outside2 test/expected/to_outside2/further_outside/wrap
 echo file4 >                     test/expected/to_outside2/file4
 mkdir                            test/expected/to_outside2/subdir3/
 echo file5 >                     test/expected/to_outside2/subdir3/file5
-ln -s  /bin/sh                   test/expected/to_bin_sh
+#Change these two lines if you choose to not inline absolute symlinks.
+#ln -s  /bin/sh                   test/expected/to_bin_sh
+cp     /bin/sh                   test/expected/to_bin_sh
 ln -sr test/expected/file3       test/expected/to_file3
 ln -sr test/expected/subdir1     test/expected/to_subdir1
 
@@ -79,4 +82,4 @@ cd test/expected/
 find -printf '%p -> %l\n' | grep -v .git | sort > ../expected.log
 cd ../../
 
-diff -u999 test/output.log test/expected.log
+diff -u999 test/output.log test/expected.log && echo Test passed
