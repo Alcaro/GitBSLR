@@ -76,7 +76,7 @@ static string resolve_symlink(cstring path)
 		struct stat64 st;
 		__xstat64(_STAT_VER, newpath, &st);
 		
-		if (st_target.st_dev == st.st_dev && st_target.st_ino == st.st_ino)
+		if (newpath_abs != path_abs && st_target.st_dev == st.st_dev && st_target.st_ino == st.st_ino)
 		{
 			if (i == parts.size()-1) return ".";
 			string ret;
