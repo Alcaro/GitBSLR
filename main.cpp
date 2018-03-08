@@ -40,6 +40,11 @@ again: ;
 	return buf.ptr();
 }
 
+static string realpath_d(cstring path)
+{
+	return string::create_usurp(realpath(path.c_str(), NULL));
+}
+
 //Input:
 // A path to a file, relative to the Git repo root, usable with stat() or readlink().
 //Output:
@@ -49,8 +54,12 @@ again: ;
 static string resolve_symlink(cstring path)
 {
 	//algorithm:
+	//if the current directory is .git:
+	// tell the truth
+	//if the path is absolute and points to . or somewhere under .git:
+	// tell the truth
 	//for each prefix of the path:
-	// if path is the same thing as prefix (st_dev/st_ino identical):
+	// if path is the same thing as prefix (realpath identical):
 	//  it's a link
 	// if path is a link, and points to inside prefix:
 	//  it's a link
@@ -61,22 +70,29 @@ static string resolve_symlink(cstring path)
 	if (path_linktarget[0] == '/') return path_linktarget;
 #endif
 	
-	string path_abs = string::create_usurp(realpath(path.c_str(), NULL));
+	string root_abs = realpath_d(".");
+	if (root_abs.endswith("/.git")) return path_linktarget;
 	
-	struct stat64 st_target;
-	__xstat64(_STAT_VER, path.c_str(), &st_target);
+	string path_abs = realpath_d(path);
+	if (path[0] == '/')
+	{
+		if (path_abs == root_abs || path_abs == root_abs+"/.git" || path_abs.startswith(root_abs+"/.git/")) return path_linktarget;
+		else
+		{
+			puts("GitBSLR: internal error, unexpected absolute path "+path);
+			exit(1);
+		}
+	}
+	
 	
 	array<cstring> parts = path.csplit("/");
 	for (size_t i=0;i<parts.size();i++)
 	{
 		string newpath = parts.slice(0,i).join("/");
 		if (newpath == "") newpath = ".";
-		string newpath_abs = string::create_usurp(realpath(newpath, NULL));
+		string newpath_abs = realpath_d(newpath);
 		
-		struct stat64 st;
-		__xstat64(_STAT_VER, newpath, &st);
-		
-		if (newpath_abs != path_abs && st_target.st_dev == st.st_dev && st_target.st_ino == st.st_ino)
+		if (newpath_abs == path_abs)
 		{
 			if (i == parts.size()-1) return ".";
 			string ret;
