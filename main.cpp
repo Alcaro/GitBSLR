@@ -1,5 +1,3 @@
-#define INLINE_ABSOLUTE_LINKS 1
-
 #include "arlib.h"
 
 #include <dlfcn.h>
@@ -56,7 +54,7 @@ static string resolve_symlink(cstring path)
 	//algorithm:
 	//if the current directory is .git:
 	// tell the truth
-	//if the path is absolute and points to . or somewhere under .git:
+	//if the path is absolute and points to ., or somewhere under .git:
 	// tell the truth
 	//for each prefix of the path:
 	// if path is the same thing as prefix (realpath identical):
@@ -66,9 +64,6 @@ static string resolve_symlink(cstring path)
 	//otherwise, it's not a link
 	
 	string path_linktarget = readlink_d(path);
-#if !INLINE_ABSOLUTE_LINKS
-	if (path_linktarget[0] == '/') return path_linktarget;
-#endif
 	
 	string root_abs = realpath_d(".");
 	if (root_abs.endswith("/.git")) return path_linktarget;
@@ -124,7 +119,7 @@ __attribute__((constructor)) static void init()
 
 
 //the first thing Git does is find .git and chdir to it
-//.. and .git are never symlinks and should never be, so before chdir is called, 
+//.. and .git are never symlinks and should never be, so before chdir is called, let's not override anything
 DLLEXPORT int chdir(const char * path);
 DLLEXPORT int chdir(const char * path)
 {
@@ -145,6 +140,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 		buf->st_mode |= S_IFLNK;
 		buf->st_size = newpath.length();
 	}
+	//looking for the else clause to make it say 'no, it's not a link'? that's done by calling stat rather than lstat
 	return ret;
 }
 
@@ -188,6 +184,8 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	string linkpath_abs = string::create_usurp(realpath(file::dirname(target)+linkpath, NULL));
 	if (reporoot_abs != linkpath_abs && !linkpath_abs.startswith(reporoot_abs))
 	{
+		puts((string)"GitBSLR: link at "+target+" is not allowed to point to "+linkpath+
+		             ", since "+linkpath_abs+" is not under "+reporoot_abs);
 		errno = EPERM;
 		return -1;
 	}
@@ -197,8 +195,8 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	}
 }
 
-//I could keep track of what path this directory is for, or I could just tell Git that we don't know the filetype.
-//The latter causes Git to fall back to stat (or, in this case, __xstat64), where I have the path easily available.
+//I could hijack opendir and keep track of what path this DIR* is for, or I could just tell Git that we don't know the filetype.
+//The latter causes Git to fall back to some appropriate stat() variant, where I have the path easily available.
 DLLEXPORT struct dirent* readdir(DIR* dirp);
 DLLEXPORT struct dirent* readdir(DIR* dirp)
 {
