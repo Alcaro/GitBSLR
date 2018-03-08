@@ -69,9 +69,15 @@ static string resolve_symlink(cstring path)
 	if (root_abs.endswith("/.git")) return path_linktarget;
 	
 	string path_abs = realpath_d(path);
+	if (!path_abs) return ""; // nonexistent -> not a symlink
+	
 	if (path[0] == '/')
 	{
-		if (path_abs == root_abs || path_abs == root_abs+"/.git" || path_abs.startswith(root_abs+"/.git/")) return path_linktarget;
+		if (path_abs == root_abs || path_abs == root_abs+"/.git" || path_abs.startswith(root_abs+"/.git/") ||
+		    path_abs.startswith("/usr/share/git-core/"))
+		{
+			return path_linktarget;
+		}
 		else
 		{
 			puts("GitBSLR: internal error, unexpected absolute path "+path);
@@ -180,9 +186,18 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 DLLEXPORT int symlink(const char * target, const char * linkpath);
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
-	string reporoot_abs = string::create_usurp(realpath(".", NULL));
-	string linkpath_abs = string::create_usurp(realpath(file::dirname(target)+linkpath, NULL));
-	if (reporoot_abs != linkpath_abs && !linkpath_abs.startswith(reporoot_abs))
+	string reporoot_abs = realpath_d(".");
+	
+	string linkpath_abs;
+	
+	string linkpath_tmp;
+	if (linkpath[0]=='/') linkpath_tmp = linkpath;
+	else linkpath_tmp = file::dirname(target)+linkpath;
+	
+	linkpath_abs = realpath_d(linkpath_tmp);
+	if (!linkpath_abs) linkpath_abs = realpath_d(file::dirname(linkpath_tmp));
+	
+	if (!reporoot_abs || !linkpath_abs || (reporoot_abs != linkpath_abs && !linkpath_abs.startswith(reporoot_abs+"/")))
 	{
 		puts((string)"GitBSLR: link at "+target+" is not allowed to point to "+linkpath+
 		             ", since "+linkpath_abs+" is not under "+reporoot_abs);
