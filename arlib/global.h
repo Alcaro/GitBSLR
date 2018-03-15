@@ -55,7 +55,7 @@
 #endif
 
 typedef void(*funcptr)();
-typedef uint8_t byte;
+typedef uint8_t byte; // TODO: remove
 
 #define using(obj) for(bool FIRST=true;FIRST;FIRST=false)for(obj;FIRST;FIRST=false)
 //in C++17, this becomes if(obj;true)
@@ -135,7 +135,7 @@ template<typename T, size_t N> char(&ARRAY_SIZE_CORE(T(&x)[N]))[N];
 //- static_assert(false) throws something at compile time
 //- multiple static_assert(true) works
 //- does not require unique names for each assertion
-//- zero traces left in the object files, assuming no debug info
+//- zero traces left in the object files, except maybe debug info
 //- zero warnings under any compiler
 //- static_assert(2+2 < 5); works at the global scope
 //- static_assert(2+2 < 5); works as a class member
@@ -152,7 +152,7 @@ template<typename T, size_t N> char(&ARRAY_SIZE_CORE(T(&x)[N]))[N];
 #define TYPENAME_IF_GCC
 #endif
 
-#if __cplusplus < 201999 // TODO: replace with real C++17
+#if __cplusplus < 201703
 #if __cplusplus < 201103
 template<bool x> struct static_assert_t;
 template<> struct static_assert_t<true> { struct STATIC_ASSERTION_FAILED {}; };
@@ -316,8 +316,30 @@ public:
 	~autoptr() { delete ptr; }
 };
 
-class null_t_impl {};
-#define null_t null_t_impl* // random pointer type nobody will ever use
+template<typename T>
+class autofree : nocopy {
+	T* ptr;
+public:
+	autofree() : ptr(NULL) {}
+	autofree(T* ptr) : ptr(ptr) {}
+	autofree(autofree<T>&& other) { ptr=other.ptr; other.ptr=NULL; }
+	autofree<T>& operator=(T* ptr) { free(this->ptr); this->ptr=ptr; return *this; }
+	autofree<T>& operator=(autofree<T>&& other) { free(this->ptr); ptr=other.ptr; other.ptr=NULL; return *this; }
+	T* release() { T* ret = ptr; ptr = NULL; return ret; }
+	T* operator->() { return ptr; }
+	T& operator*() { return *ptr; }
+	const T* operator->() const { return ptr; }
+	const T& operator*() const { return *ptr; }
+	operator T*() { return ptr; }
+	operator const T*() const { return ptr; }
+	explicit operator bool() const { return ptr; }
+	~autofree() { free(ptr); }
+};
+
+#if __cplusplus < 201103
+class nullptr_t_impl {};
+#define nullptr_t nullptr_t_impl* // random pointer type nobody will ever use
+#endif
 
 
 
@@ -328,7 +350,8 @@ class null_t_impl {};
 //void asprintf(char * * ptr, const char * fmt, ...);
 //#endif
 
-#ifdef _WIN32
+//Acts like strstr, with the obvious difference.
+#ifdef _WIN32 // linux has this already
 void* memmem(const void * haystack, size_t haystacklen, const void * needle, size_t needlelen);
 #endif
 //Returns distance to first difference, or 'len' if that's smaller.

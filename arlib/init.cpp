@@ -193,11 +193,12 @@ void argparse::parse(const char * const * argv)
 			single_arg("", arg, true, NULL);
 		}
 	}
+	m_has_gui = false;
 	
-	parse_post(false);
+	parse_post();
 }
 
-void argparse::parse_post(bool has_gui)
+void argparse::parse_post()
 {
 	for (arg_base& arg : m_args)
 	{
@@ -260,7 +261,7 @@ template<typename... Args>
 static void test_one(int bools, int strs, int ints, cstring extras, Args... argv)
 {
 	const char * const argvp[] = { "x", argv..., NULL };
-	test_one_pack(bools, strs, ints, extras,false, argvp);
+	test_one_pack(bools, strs, ints, extras, false, argvp);
 }
 
 template<typename... Args>
@@ -294,6 +295,7 @@ test("argument parser", "string,array", "argparse")
 	test_error("--str"); // missing argument
 	test_error("--bool=error"); // argument not allowed
 	test_error("--int=error"); // can't parse
+	test_error("eee"); // extras not allowed here
 	
 	//missing-required, not tested by the above
 	try
@@ -309,43 +311,45 @@ test("argument parser", "string,array", "argparse")
 	catch(int) {}
 }
 
+template<typename... Args>
+static void test_getopt(bool a, bool b, const char * c, const char * nonopts, Args... argv)
+{
+	const char * const argvp[] = { "x", argv..., NULL };
+	
+	bool ra = false;
+	bool rb = false;
+	string rc;
+	array<string> realnonopts;
+	
+	argparse args;
+	args.add('a', "a", &ra);
+	args.add('b', "b", &rb);
+	args.add('c', "c", &rc);
+	args.add("", &realnonopts);
+	
+	args.parse(argvp);
+	
+	assert_eq(ra, a);
+	assert_eq(rb, b);
+	assert_eq(rc, c);
+	assert_eq(realnonopts.join("/"), nonopts);
+}
+
 test("argument parser 2","string,array","argparse")
 {
-assert(!"use these");
-//% testopt
-//aflag = 0, bflag = 0, cvalue = (null)
-//
-//% testopt -a -b
-//aflag = 1, bflag = 1, cvalue = (null)
-//
-//% testopt -ab
-//aflag = 1, bflag = 1, cvalue = (null)
-//
-//% testopt -c foo
-//aflag = 0, bflag = 0, cvalue = foo
-//
-//% testopt -cfoo
-//aflag = 0, bflag = 0, cvalue = foo
-//
-//% testopt arg1
-//aflag = 0, bflag = 0, cvalue = (null)
-//Non-option argument arg1
-//
-//% testopt -a arg1
-//aflag = 1, bflag = 0, cvalue = (null)
-//Non-option argument arg1
-//
-//% testopt -c foo arg1
-//aflag = 0, bflag = 0, cvalue = foo
-//Non-option argument arg1
-//
-//% testopt -a -- -b
-//aflag = 1, bflag = 0, cvalue = (null)
-//Non-option argument -b
-//
-//% testopt -a -
-//aflag = 1, bflag = 0, cvalue = (null)
-//Non-option argument -
+	//getopt examples, https://www.gnu.org/software/libc/manual/html_node/Example-of-Getopt.html
+	//0/1 as bool because the example does so
+	
+	test_getopt(0, 0, NULL,  NULL);
+	test_getopt(1, 1, NULL,  NULL,     "-a", "-b");
+	test_getopt(1, 1, NULL,  NULL,     "-ab");
+	test_getopt(0, 0, "foo", NULL,     "-c", "foo");
+	test_getopt(0, 0, "foo", NULL,     "-cfoo");
+	test_getopt(0, 0, NULL,  "arg1",   "arg1");
+	test_getopt(1, 0, NULL,  "arg1",   "-a", "arg1");
+	test_getopt(0, 0, "foo", "arg1",   "-c", "foo", "arg1");
+	test_getopt(1, 0, NULL,  "-b",     "-a", "--", "-b");
+	test_getopt(1, 0, NULL,  "-",      "-a", "-");
 }
 #endif
 

@@ -207,6 +207,8 @@ bool file::unlink(cstring filename)
 
 static string exepath;
 cstring file::exepath() { return ::exepath; }
+static string cwd;
+cstring file::cwd() { return ::cwd; }
 
 void arlib_init_file()
 {
@@ -228,6 +230,9 @@ again: ;
 	
 	exepath = buf.ptr();
 	
+	
+	cwd = getcwd(NULL, 0);
+	if (!cwd.endswith("/")) cwd += "/";
 	
 	//char * cwd_init_tmp=getcwd(NULL, 0);
 	//char * cwdend=strrchr(cwd_init_tmp, '/');

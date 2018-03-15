@@ -1,9 +1,10 @@
 #pragma once
 #include "array.h"
 #include "endian.h"
+#include "string.h"
 
-//prefers little endian, it's more common
 //you're welcome to extend this object if you need a more rare operation, like leb128
+//no part of it checks for overflow, use remaining()
 class bytestream {
 protected:
 	const uint8_t* start;
@@ -11,9 +12,16 @@ protected:
 	const uint8_t* end;
 	
 public:
-	bytestream(arrayview<uint8_t> buf) : start(buf.ptr()), at(buf.ptr()), end(buf.ptr()+buf.size()) {}
+	bytestream(arrayview<uint8_t> buf)  { reset(buf); }
 	bytestream(const bytestream& other) : start(other.start), at(other.at), end(other.at) {}
 	bytestream() : start(NULL), at(NULL), end(NULL) {}
+	
+	void reset(arrayview<uint8_t> buf)
+	{
+		start = buf.ptr();
+		at = buf.ptr();
+		end = buf.ptr()+buf.size();
+	}
 	
 	arrayview<uint8_t> bytes(size_t n)
 	{
@@ -27,8 +35,6 @@ public:
 	}
 	bool signature(cstring sig)
 	{
-		if (remaining() < sig.length()) return false;
-		
 		arrayview<uint8_t> expected = sig.bytes();
 		arrayview<uint8_t> actual = peekbytes(sig.length());
 		if (actual == expected)

@@ -113,7 +113,7 @@ void HTML::entity_decode(string& out, cstring& in, bool isattr)
 		out += string::codepoint(ccode);
 		return;
 	}
-	abort(); // should be unreachable
+	//else fall through
 	
 fail:
 	out += '&';
@@ -138,4 +138,5 @@ test("HTML entities", "string", "html")
 	assert_eq(HTML::entity_decode("&ampersand;"), "&ersand;");
 	
 	assert_eq(HTML::entity_decode("&#x00;&#x01;&#x7F;&#x80;&#x81;&#xD800;&#xFFFFFFFF;"), "�\x01\x7F€\xC2\x81��");
+	assert_eq(HTML::entity_decode("& error"), "& error");
 }

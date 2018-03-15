@@ -98,7 +98,7 @@ static inline ssize_t write(int fd, const void * buf, size_t count)
 	return syscall3(__NR_write, fd, (long)buf, count);
 }
 
-#define fstat fstat_
+#define fstat fstat_ // gcc claims a few syscalls are ambiguous, the outer (extern) one being as good as this one
 static inline int fstat(int fd, struct stat * buf)
 {
 	return syscall2(__NR_fstat, fd, (long)buf);
@@ -120,7 +120,7 @@ static inline int dup2(int oldfd, int newfd)
 	return syscall2(__NR_dup2, oldfd, newfd);
 }
 
-#define recvmsg recvmsg_ // gcc claims a few syscalls are ambiguous, the outer (extern) one being as good as this one
+#define recvmsg recvmsg_
 static inline ssize_t recvmsg(int sockfd, struct msghdr * msg, int flags)
 {
 	return syscall3(__NR_recvmsg, sockfd, (long)msg, flags);
@@ -222,7 +222,7 @@ static inline int do_broker_req(broker_req* req)
 static char cwd[SAND_PATHLEN];
 //not sure about the return type, glibc uses int despite buflen being size_t. guess they don't care about 2GB paths
 //then neither do I
-static inline int getcwd(char* buf, size_t size)
+static inline int getcwd(char * buf, size_t size)
 {
 	size_t outsize = strlen(cwd)+1;
 	if (outsize > size) outsize = size;

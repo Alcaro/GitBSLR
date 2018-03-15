@@ -46,7 +46,7 @@ public:
 		this->count=0;
 	}
 	
-	arrayview(null_t)
+	arrayview(nullptr_t)
 	{
 		this->items=NULL;
 		this->count=0;
@@ -175,7 +175,7 @@ public:
 		this->count=0;
 	}
 	
-	arrayvieww(null_t)
+	arrayvieww(nullptr_t)
 	{
 		this->items=NULL;
 		this->count=0;
@@ -406,7 +406,7 @@ public:
 		this->count = 0;
 	}
 	
-	array(null_t)
+	array(nullptr_t)
 	{
 		this->items = NULL;
 		this->count = 0;
@@ -536,6 +536,10 @@ inline array<T2> arrayview<T>::cast() const
 	for (const T& tmp : *this) ret.append(tmp);
 	return std::move(ret);
 }
+
+typedef arrayview<uint8_t> bytes;
+typedef arrayvieww<uint8_t> bytesw;
+typedef array<uint8_t> bytearray;
 
 
 template<> class array<bool> {
@@ -809,7 +813,7 @@ public:
 	//array& operator+=(const array<bool>& other)
 	//const T* begin() { return this->items; }
 	//const T* end() { return this->items+this->count; }
-	//array(null_t)
+	//array(nullptr_t)
 };
 
 

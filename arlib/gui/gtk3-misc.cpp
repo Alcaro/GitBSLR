@@ -121,7 +121,8 @@ void arlib_init_gui(argparse& args, char** argv)
 	GError* error = NULL;
 	gtk_init_with_args(&argc, &argv, NULL, gtkargs.ptr(), NULL, &error);
 	
-	args.parse_post(argv);
+	if (argv[1]) args.error("non-arguments not supported");
+	args.parse_post();
 	
 	args.m_has_gui = true;
 	if (error != NULL)
@@ -135,8 +136,7 @@ void arlib_init_gui(argparse& args, char** argv)
 		}
 		else
 		{
-			fprintf(stderr, "%s: %s\n", argv[0], error->message);
-			exit(1);
+			args.error(error->message);
 		}
 	}
 	
@@ -148,9 +148,12 @@ void arlib_init_gui(argparse& args, char** argv)
 //	gtk_window_set_default_icon(gdk_pixbuf_new_from_data((guchar*)img.pixels, GDK_COLORSPACE_RGB, true, 8, 64,64, 64*4, NULL, NULL));
 //#endif
 #if defined(ARGUIPROT_X11) && defined(ARLIB_OPENGL)
-	window_x11.display = gdk_x11_get_default_xdisplay();
-	window_x11.screen = gdk_x11_get_default_screen();
-	window_x11.root = gdk_x11_get_default_root_xwindow();//alternatively XRootWindow(window_x11.display, window_x11.screen)
+	if (args.m_has_gui)
+	{
+		window_x11.display = gdk_x11_get_default_xdisplay();
+		window_x11.screen = gdk_x11_get_default_screen();
+		window_x11.root = gdk_x11_get_default_root_xwindow();//alternatively XRootWindow(window_x11.display, window_x11.screen)
+	}
 #endif
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "global.h"
 
+/*
 //error==0 means value exists and is valid, anything else means it doesn't
 template<typename T> class maybe {
 public:
@@ -15,8 +16,8 @@ public:
 		error = 0;
 		new(&value) T(data);
 	}
-	maybe(null_t) : error(1) {}
-	maybe(null_t, int error) : error(error) {}
+	maybe(nullptr_t) : error(1) {}
+	maybe(nullptr_t, int error) : error(error) {}
 	
 	maybe(const maybe<T>& other)
 	{
@@ -44,9 +45,10 @@ template<> class maybe<void> {
 public:
 	int error;
 	
-	maybe(null_t) : error(1) {}
-	maybe(null_t, int error) : error(error) {}
+	maybe(nullptr_t) : error(1) {}
+	maybe(nullptr_t, int error) : error(error) {}
 	
 	explicit operator bool() { return !error; }
 	bool operator!() { return !!error; }
 };
+*/

@@ -343,7 +343,11 @@ void process::_on_sigchld_offloop()
 #ifdef ARLIB_THREAD
 		this->loop->submit(bind_ptr(&onexit_t::invoke_unref, onexit_cb));
 #else
+		//ensure exitcode is written before onexit is called
+		lock_write(&this->exitcode, status);
+		lock_write(&this->pid, -1);
 		onexit_cb->invoke_unref(); // if Arlib is configured single threaded, we're always on the right thread, so this is safe
+		return; // no point writing twice
 #endif
 	}
 	

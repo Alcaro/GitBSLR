@@ -112,14 +112,11 @@ private:
 	string get_usage();
 	void usage();
 	void error(cstring why);
+	void error_unexpected_arg(cstring name);
+	void error_unexpected_nonarg();
 	void single_arg(arg_base& arg, cstring value, bool must_use_value, bool* used_value);
 	void single_arg(cstring name, cstring value, bool must_use_value, bool* used_value);
 	void single_arg(char sname, cstring value, bool must_use_value, bool* used_value);
-	
-	void set_appname(cstring name)
-	{
-		m_appname = name;
-	}
 	
 public:
 	//The handler should not return; if it does, the default handler (print error to stderr and terminate) is called.
@@ -134,7 +131,7 @@ private:
 	const char * next_if_appropriate(const char * arg);
 	
 	void parse_pre(const char * const * argv);
-	void parse_post(bool has_gui);
+	void parse_post(); // Remember to set m_has_gui.
 	
 public:
 	void parse(const char * const * argv);

@@ -212,7 +212,7 @@ ifeq ($(ARGUI),1)
     CONF_CFLAGS += $(shell pkg-config --cflags gtk+-3.0)
     CONF_LFLAGS += -ldl -lX11 $(shell pkg-config --libs gtk+-3.0)
     ifneq ($(OPT),0)
-      # don't know if this has ever caught anything except NULLs, but they do no harm on debug
+      # don't know if this has ever caught anything except NULLs, but they're harmless on debug
       # but they do waste space on release builds.
       CONF_CFLAGS += -DG_DISABLE_CAST_CHECKS
     endif
@@ -266,6 +266,7 @@ ifeq ($(ARSOCKET),1)
     endif
   endif
   
+  #TODO: allow using multiple at once, the tests could use that
   ifeq ($(ARSOCKET_SSL),no)
     #no SSL
     #socketssl will still be available at compile time, but fails linking
@@ -348,9 +349,9 @@ test: obj/arlibtest$(EXESUFFIX)
 	$(TESTRUNNER) obj/arlibtest$(EXESUFFIX)
 check: test
 test-all: obj/arlibtest$(EXESUFFIX)
-	$(TESTRUNNER) obj/arlibtest$(EXESUFFIX) +
+	$(TESTRUNNER) obj/arlibtest$(EXESUFFIX) --all
 test-all-twice: obj/arlibtest$(EXESUFFIX)
-	$(TESTRUNNER) obj/arlibtest$(EXESUFFIX) + +
+	$(TESTRUNNER) obj/arlibtest$(EXESUFFIX) --all --twice
 endif
 
 

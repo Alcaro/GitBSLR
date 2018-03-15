@@ -27,6 +27,7 @@ EOF
 
 cat > Makefile <<-EOF
 	PROGRAM = $program
+	ARTYPE = exe
 	ARGUI = 0
 	AROPENGL = 0
 	ARTHREAD = 0

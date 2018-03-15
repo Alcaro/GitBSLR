@@ -111,7 +111,8 @@ void _test_skip(cstring why)
 	if (result!=err_ok) return;
 	if (!all_tests)
 	{
-		puts("skipped: "+why);
+		//yes, dead code.
+		if (all_tests) puts("skipped: "+why);
 		test_throw(err_skip);
 	}
 }
@@ -254,10 +255,7 @@ int main(int argc, char* argv[])
 {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	puts("Initializing Arlib...");
-//if(argc>1)abort(); // TODO: argument parser
-#ifndef ARGUI_NONE
-	arlib_init(NULL, argv);
-#endif
+	bool run_twice = false;
 	
 #ifdef __linux__
 	struct rlimit rlim = { 500*1024*1024, RLIM_INFINITY };
@@ -265,14 +263,15 @@ int main(int argc, char* argv[])
 	setrlimit(RLIMIT_DATA, &rlim);
 #endif
 	
-	all_tests = (argc>1);
-	bool all_tests_twice = (argc>2);
+#if 1 // set to 0 if string or array is misbehaving
+	argparse args;
+	args.add("all", &all_tests);
+	args.add("twice", &run_twice);
+	arlib_init(args, argv);
 	
 	puts("Sorting tests...");
 	testlist* alltests = sort_tests(g_testlist);
 	
-	//if running Arlib's own tests, this runs before string/array tests
-	//don't care, strings/arrays work; worst case, I comment it out
 	for (testlist* outer = alltests; outer; outer = outer->next)
 	{
 		if (outer->requires[0] == '\0') continue;
@@ -296,19 +295,37 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
+#else
+	arlib_init(NULL, argv);
+	testlist* alltests = g_testlist;
+#endif
 	
-	for (int pass = 0; pass < (all_tests_twice ? 2 : 1); pass++)
+	int numtests = 0;
+	testlist* numtests_iter = alltests;
+	while (numtests_iter)
+	{
+		numtests++;
+		numtests_iter = numtests_iter->next;
+	}
+	
+	for (int pass = 0; pass < (run_twice ? 2 : 1); pass++)
 	{
 		int count[5]={0};
 		
 		memset(max_latencies_us, 0, sizeof(max_latencies_us));
 		
+		int testnum = 0;
+		
 		cur_test = alltests;
 		while (cur_test)
 		{
+			testnum++;
 			testlist* next = cur_test->next;
-			if (cur_test->name) printf("Testing %s (%s:%i)... ", cur_test->name, cur_test->filename, cur_test->line);
-			else printf("Testing %s:%i... ", cur_test->filename, cur_test->line);
+			
+			if (all_tests)
+				printf("Testing %s (%s:%i)... ", cur_test->name, cur_test->filename, cur_test->line);
+			else
+				printf("\r                                        \rTest %i/%i (%s)... ", testnum, numtests, cur_test->name);
 			fflush(stdout);
 			callstack.reset();
 			result = err_ok;
@@ -323,12 +340,12 @@ int main(int argc, char* argv[])
 				result = e;
 			}
 			
-			if (result == err_ok) puts("pass");
+			if (all_tests && result == err_ok) puts("pass");
 			count[result]++;
 			cur_test = next;
 		}
 		
-		printf("Passed %i, failed %i", count[0], count[1]);
+		printf("\rPassed %i, failed %i", count[0], count[1]);
 		if (count[2]) printf(", skipped %i", count[2]);
 		if (count[3]) printf(", inconclusive %i", count[3]);
 		if (count[4]) printf(", expected-fail %i", count[4]);
@@ -349,7 +366,7 @@ int main(int argc, char* argv[])
 		}
 		
 #ifdef HAVE_VALGRIND
-		if (all_tests_twice)
+		if (run_twice)
 		{
 			if (pass==0)
 			{
@@ -412,7 +429,5 @@ test("tests themselves (4/8)", "test2,test3", "test4")
 	assert_eq(testnum, 3);
 	testnum = 4;
 }
-
-test("", "", "") { test_expfail("use an argument parser"); }
 #endif
 #endif

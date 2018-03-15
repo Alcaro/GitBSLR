@@ -12,7 +12,7 @@ public:
 		
 		virtual size_t pread(arrayvieww<byte> target, size_t start) = 0;
 		virtual bool pwrite(arrayview<byte> data, size_t start = 0) = 0;
-		virtual bool replace(arrayview<byte> data) { return resize(data.size()) && pwrite(data); }
+		virtual bool replace(arrayview<byte> data) { return resize(data.size()) && (data.size() == 0 || pwrite(data)); }
 		
 		virtual arrayview<byte> mmap(size_t start, size_t len) = 0;
 		virtual void unmap(arrayview<byte> data) = 0;
@@ -75,7 +75,7 @@ public:
 	
 private:
 	//This one will create the file from the filesystem.
-	//create() can simply return create_fs(filename), or can additionally support stuff like gvfs.
+	//open_impl() can simply return open_impl_fs(filename), or can additionally support stuff like gvfs.
 	static impl* open_impl_fs(cstring filename, mode m);
 	//A path refers to a directory if it ends with a slash, and file otherwise. Directories may not be open()ed.
 	static impl* open_impl(cstring filename, mode m);
@@ -215,7 +215,7 @@ public:
 	static string basename(cstring path);
 	
 	//Returns whether the path is absolute.
-	//On Unix, absolute paths start with /.
+	//On Unix, absolute paths start with a slash.
 	//On Windows:
 	// Absolute paths start with two slashes, or letter+colon+slash.
 	// Drive-relative or rooted paths (/foo.txt, C:foo.txt) are considered invalid and are implementation-defined.
@@ -236,12 +236,14 @@ public:
 	//Removes all possible ./ and ../ components, and duplicate slashes, while still referring to the same file.
 	//Similar to realpath(), but does not flatten symlinks.
 	//foo/bar/../baz -> foo/baz, ./foo.txt -> foo.txt, ../foo.txt -> ../foo.txt, foo//bar.txt -> foo/bar.txt, . -> .
-	//Invalid paths (above the root, or Windows half-absolute paths) are undefined behavior.
+	//Invalid paths (above the root, or Windows half-absolute paths) are undefined behavior. Relative paths remain relative.
 	static string resolve(cstring path);
 	
-	//Returns the path of the executable.
+	//Returns the path of the executable, including filename.
 	//The cstring is owned by Arlib and lives forever.
 	static cstring exepath();
+	//Returns the current working directory.
+	static cstring cwd();
 private:
 	static bool unlink_fs(cstring filename);
 };
