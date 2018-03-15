@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#set -v
+
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?

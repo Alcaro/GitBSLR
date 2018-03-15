@@ -52,9 +52,7 @@ static string realpath_d(cstring path)
 static string resolve_symlink(cstring path)
 {
 	//algorithm:
-	//if the current directory is .git:
-	// tell the truth
-	//if the path is absolute and points to ., or somewhere under .git:
+	//if the path is inside .git/:
 	// tell the truth
 	//for each prefix of the path:
 	// if path is the same thing as prefix (realpath identical):
@@ -66,23 +64,17 @@ static string resolve_symlink(cstring path)
 	string path_linktarget = readlink_d(path);
 	
 	string root_abs = realpath_d(".");
-	if (root_abs.endswith("/.git")) return path_linktarget;
 	
 	string path_abs = realpath_d(path);
 	if (!path_abs) return ""; // nonexistent -> not a symlink
+	if ((path_abs+"/").contains("/.git/")) return path_linktarget; // under .git -> return truth
+	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but this one is not.
 	
+	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
 	{
-		if (path_abs == root_abs || path_abs == root_abs+"/.git" || path_abs.startswith(root_abs+"/.git/") ||
-		    path_abs.startswith("/usr/share/git-core/"))
-		{
-			return path_linktarget;
-		}
-		else
-		{
-			puts("GitBSLR: internal error, unexpected absolute path "+path);
-			exit(1);
-		}
+		puts("GitBSLR: internal error, unexpected absolute path "+path);
+		exit(1);
 	}
 	
 	
@@ -186,21 +178,48 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 DLLEXPORT int symlink(const char * target, const char * linkpath);
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
+	if (strstr(linkpath, "/.git/"))
+	{
+		//git init (and clone) create a symlink at some random filename in .git to 'testing' for whatever reason. let it
+		return symlink_o(target, linkpath);
+	}
+	
 	string reporoot_abs = realpath_d(".");
 	
-	string linkpath_abs;
+	string target_abs;
 	
-	string linkpath_tmp;
-	if (linkpath[0]=='/') linkpath_tmp = linkpath;
-	else linkpath_tmp = file::dirname(target)+linkpath;
+	string target_tmp;
+	if (target[0]=='/') target_tmp = target;
+	else target_tmp = file::dirname(reporoot_abs+"/"+linkpath)+target;
 	
-	linkpath_abs = realpath_d(linkpath_tmp);
-	if (!linkpath_abs) linkpath_abs = realpath_d(file::dirname(linkpath_tmp));
+	target_abs = realpath_d(target_tmp);
 	
-	if (!reporoot_abs || !linkpath_abs || (reporoot_abs != linkpath_abs && !linkpath_abs.startswith(reporoot_abs+"/")))
+	if (!target_abs)
 	{
-		puts((string)"GitBSLR: link at "+target+" is not allowed to point to "+linkpath+
-		             ", since "+linkpath_abs+" is not under "+reporoot_abs);
+		//TODO: figure out what this should really do
+puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
+             ", since that target doesn't exist");
+//puts(string("A")+reporoot_abs);
+//puts(string("B")+target);
+//puts(string("C")+linkpath);
+//puts(string("D")+target_tmp);
+//puts(string("E")+target_abs);
+errno = EPERM;
+return -1;
+		target_abs = realpath_d(file::dirname(target_tmp));
+	}
+	
+	if ((target_abs+"/").contains("/.git/"))
+	{
+		puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
+		             ", since that's under .git/");
+		errno = EPERM;
+		return -1;
+	}
+	else if (!reporoot_abs || !target_abs || (reporoot_abs != target_abs && !target_abs.startswith(reporoot_abs+"/")))
+	{
+		puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
+		             ", since "+target_abs+" is not under "+reporoot_abs);
 		errno = EPERM;
 		return -1;
 	}

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#set -v
+
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
@@ -65,7 +67,7 @@ cd test/input/wrap/the_repo/
 git init
 #strace -E LD_PRELOAD=../../../gitbslr.so  git add . 2>&1 | tee ../../../e.log
 #strace git add . 2>&1 | tee ../../../e.log
-LD_PRELOAD=../../../../gitbslr.so git add .
+LD_PRELOAD=../../../../gitbslr.so git add . || exit $?
 git commit -m "GitBSLR test"
 cd ../../../../
 
