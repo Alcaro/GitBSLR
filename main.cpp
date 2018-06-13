@@ -414,8 +414,3 @@ DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
-
-int main()
-{
-	puts(resolve_symlink("arlib"));
-}
