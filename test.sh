@@ -84,4 +84,4 @@ cd test/expected/
 find -printf '%p -> %l\n' | grep -v .git | sort > ../expected.log
 cd ../../
 
-diff -u999 test/output.log test/expected.log && echo Test passed
+diff -u999 test/output.log test/expected.log && echo Test passed; exit $?

@@ -1,4 +1,7 @@
-#include "arlib.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 #include <dlfcn.h>
 #include <dirent.h>
@@ -6,6 +9,152 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+class anyptr {
+void* data;
+public:
+template<typename T> anyptr(T* data_) { data=(void*)data_; }
+template<typename T> operator T*() { return (T*)data; }
+template<typename T> operator const T*() const { return (const T*)data; }
+};
+
+template<typename T> static T min(const T& a) { return a; }
+template<typename T, typename... Args> static T min(const T& a, Args... args)
+{
+	const T& b = min(args...);
+	if (a < b) return a;
+	else return b;
+}
+
+#define DLLEXPORT extern "C" __attribute__((__visibility__("default")))
+
+#undef malloc
+#undef realloc
+#undef calloc
+
+static void malloc_fail()
+{
+	puts("GitBSLR: out of memory");
+	exit(1);
+}
+
+static anyptr malloc_check(size_t size)
+{
+	void* ret=malloc(size);
+	if (size && !ret) malloc_fail();
+	return ret;
+}
+
+static anyptr realloc_check(anyptr ptr, size_t size)
+{
+	void* ret=realloc(ptr, size);
+	if (size && !ret) malloc_fail();
+	return ret;
+}
+
+#define malloc malloc_check
+#define realloc realloc_check
+
+class string {
+	char* ptr;
+	size_t len;
+	
+	void set(const char * other, size_t len)
+	{
+		if (!len)
+		{
+			this->ptr = NULL;
+			this->len = 0;
+			return;
+		}
+		
+		this->ptr = malloc(len+1);
+		this->len = len;
+		memcpy(ptr, other, len);
+		ptr[len] = '\0';
+	}
+	void set(const char * other) { set(other, strlen(other)); }
+	
+public:
+	string() { ptr = NULL; len = 0; }
+	string(const string& other) { set(other.ptr, other.len); }
+	string(const char * other) { set(other); }
+	string(const char * other, size_t len) { set(other, len); }
+	~string() { free(ptr); }
+	
+	operator const char *() const { return ptr ? ptr : ""; }
+	const char * c_str() const { return ptr ? ptr : ""; }
+	size_t length() const { return len; }
+	operator bool() const { return len; }
+	bool operator!() const { return len==0; }
+	
+	string& operator=(const char * other)
+	{
+		free(ptr);
+		set(other);
+		return *this;
+	}
+	string& operator=(const string& other)
+	{
+		free(ptr);
+		set(other.ptr, other.len);
+		return *this;
+	}
+	
+	string& operator+=(const string& other)
+	{
+		ptr = realloc(ptr, len+other.len+1);
+		strcpy(ptr+len, other.ptr);
+		len += other.len;
+		return *this;
+	}
+	
+	string operator+(const string& other) const
+	{
+		string ret = *this;
+		ret += other;
+		return ret;
+	}
+	
+	string operator+(const char * other) const
+	{
+		string ret = *this;
+		ret += other;
+		return ret;
+	}
+	
+	bool operator==(const char * other) const
+	{
+		if (ptr) return !strcmp(ptr, other);
+		else return (!other || !*other);
+	}
+	
+	bool operator!=(const char * other) const
+	{
+		return !operator==(other);
+	}
+	
+	static string create_usurp(char * str)
+	{
+		string ret;
+		ret.ptr = str;
+		ret.len = str ? strlen(str) : 0;
+		return ret;
+	}
+	
+	bool contains(const char * other) const
+	{
+		if (ptr) return strstr(ptr, other);
+		else return (!other || !*other);
+	}
+	bool startswith(const char * other) const
+	{
+		if (ptr) return !memcmp(ptr, other, strlen(other));
+		else return (!other || !*other);
+	}
+};
+
+
 
 typedef int (*chdir_t)(const char * path);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
@@ -20,27 +169,35 @@ static readdir64_t readdir64_o;
 static symlink_t symlink_o;
 
 
-static string readlink_d(cstring path)
+static string readlink_d(const string& path)
 {
-	array<char> buf;
-	buf.resize(64);
+	size_t buflen = 64;
+	char* buf = malloc(buflen);
 	
 again: ;
-	ssize_t r = readlink_o(path.c_str(), buf.ptr(), buf.size());
+	ssize_t r = readlink_o(path.c_str(), buf, buflen);
 	if (r <= 0) return "";
-	if ((size_t)r >= buf.size()-1)
+	if ((size_t)r >= buflen-1)
 	{
-		buf.resize(buf.size() * 2);
+		buflen *= 2;
+		buf = realloc(buf, buflen);
 		goto again;
 	}
 	
 	buf[r] = '\0';
-	return buf.ptr();
+	return string::create_usurp(buf);
 }
 
-static string realpath_d(cstring path)
+static string realpath_d(const string& path)
 {
 	return string::create_usurp(realpath(path.c_str(), NULL));
+}
+
+static string dirname_d(const string& path)
+{
+	const char * start = path;
+	const char * last = strrchr(start, '/');
+	return string(start, last-start+1);
 }
 
 //Input:
@@ -49,7 +206,7 @@ static string realpath_d(cstring path)
 // If that path should refer to a symlink, return what it points to (relative to the presumed link's parent directory).
 // If it doesn't exist, or shouldn't be a symlink, return a blank string.
 //The function may not call lstat or readlink, that'd yield infinite recursion. Instead, append _o and call that.
-static string resolve_symlink(cstring path)
+static string resolve_symlink(const string& path)
 {
 	//algorithm:
 	//if the path is inside .git/:
@@ -73,32 +230,44 @@ static string resolve_symlink(cstring path)
 	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
 	{
-		puts("GitBSLR: internal error, unexpected absolute path "+path);
+		puts((string)"GitBSLR: internal error, unexpected absolute path "+path);
 		exit(1);
 	}
 	
 	
-	array<cstring> parts = path.csplit("/");
-	for (size_t i=0;i<parts.size();i++)
+	string ret2;
+	const char * start = path;
+	const char * iter = start;
+	
+	while (true)
 	{
-		string newpath = parts.slice(0,i).join("/");
+		const char * next = strchrnul(iter+1, '/');
+		
+		string newpath = string(start, iter-start);
 		if (newpath == "") newpath = ".";
 		string newpath_abs = realpath_d(newpath);
 		
 		if (newpath_abs == path_abs)
 		{
-			if (i == parts.size()-1) return ".";
+			if (!*next) return ".";
 			string ret;
-			for (size_t j=i;j<parts.size()-1;j++) ret += "../";
-			return ret.substr(0, ~1);
+			while (*next)
+			{
+				ret += "../";
+				next = strchrnul(next+1, '/');
+			}
+			return string(ret, ret.length()-1);
 		}
 		
 		if (path_linktarget && path_abs.startswith(newpath_abs+"/"))
 		{
 			return path_linktarget;
 		}
+		
+		iter = next;
+		
+		if (!*iter) return "";
 	}
-	return "";
 }
 
 
@@ -171,7 +340,7 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 	}
 	
 	ssize_t nbytes = min(bufsiz, newpath.length());
-	memcpy(buf, newpath.bytes().ptr(), nbytes);
+	memcpy(buf, (const char*)newpath, nbytes);
 	return nbytes;
 }
 
@@ -190,7 +359,7 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	
 	string target_tmp;
 	if (target[0]=='/') target_tmp = target;
-	else target_tmp = file::dirname(reporoot_abs+"/"+linkpath)+target;
+	else target_tmp = dirname_d(reporoot_abs+"/"+linkpath)+target;
 	
 	target_abs = realpath_d(target_tmp);
 	
@@ -206,7 +375,7 @@ puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
 //puts(string("E")+target_abs);
 errno = EPERM;
 return -1;
-		target_abs = realpath_d(file::dirname(target_tmp));
+		target_abs = realpath_d(dirname_d(target_tmp));
 	}
 	
 	if ((target_abs+"/").contains("/.git/"))
@@ -244,4 +413,9 @@ DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 	dirent64* r = readdir64_o(dirp);
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
+}
+
+int main()
+{
+	puts(resolve_symlink("arlib"));
 }
