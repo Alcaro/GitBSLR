@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# GitBSLR is available under the same license as Git itself.
 
 #set -v
 

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# GitBSLR is available under the same license as Git itself.
+
 OPT ?= 0
 ifeq ($(OPT),0)
   DEBUG ?= 1
