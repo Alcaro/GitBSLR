@@ -285,6 +285,9 @@ __attribute__((constructor)) static void init()
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
+	
+	//GitBSLR shouldn't be loaded into the EDITOR
+	unsetenv("LD_PRELOAD");
 }
 
 

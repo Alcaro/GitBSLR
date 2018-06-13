@@ -70,7 +70,10 @@ git init
 #strace -E LD_PRELOAD=../../../gitbslr.so  git add . 2>&1 | tee ../../../e.log
 #strace git add . 2>&1 | tee ../../../e.log
 LD_PRELOAD=../../../../gitbslr.so git add . || exit $?
-git commit -m "GitBSLR test"
+LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-jokeeditor.py git commit || exit $?
+#this could simply be
+#git commit -m "GitBSLR test" || exit $?
+#but I want this as a regression test
 cd ../../../../
 
 mkdir test/output/
