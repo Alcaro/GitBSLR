@@ -228,7 +228,7 @@ static string resolve_symlink(const string& path)
 	string path_abs = realpath_d(path);
 	if (!path_abs) return ""; // nonexistent -> not a symlink
 	if ((path_abs+"/").contains("/.git/")) return path_linktarget; // under .git -> return truth
-	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but this one is not.
+	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but the actual absolute path is not.
 	
 	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
