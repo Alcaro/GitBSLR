@@ -278,6 +278,7 @@ static string resolve_symlink(string path)
 
 
 static bool initialized = false;
+static bool debug = false;
 
 __attribute__((constructor)) static void init()
 {
@@ -289,6 +290,12 @@ __attribute__((constructor)) static void init()
 	
 	//GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
+	
+	if (getenv("GITBSLR_DEBUG"))
+	{
+		debug = true;
+		fprintf(stderr, "GitBSLR: loaded\n");
+	}
 }
 
 
@@ -297,6 +304,8 @@ __attribute__((constructor)) static void init()
 DLLEXPORT int chdir(const char * path);
 DLLEXPORT int chdir(const char * path)
 {
+	if (debug) fprintf(stderr, "GitBSLR: chdir(%s)\n", path);
+	
 	initialized = true;
 	return chdir_o(path);
 }
@@ -308,6 +317,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	if (ret<0 || !initialized) return ret;
 	
 	string newpath = resolve_symlink(path);
+	if (debug) fprintf(stderr, "GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
 	{
 		buf->st_mode &= ~S_IFMT;
@@ -325,6 +335,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	if (ret<0 || !initialized) return ret;
 	
 	string newpath = resolve_symlink(path);
+	if (debug) fprintf(stderr, "GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
 	{
 		buf->st_mode &= ~S_IFMT;
@@ -340,6 +351,7 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 	if (!initialized) return readlink_o(path, buf, bufsiz);
 	
 	string newpath = resolve_symlink(path);
+	if (debug) fprintf(stderr, "GitBSLR: readlink(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
 	if (!newpath)
 	{
 		errno = EINVAL;
@@ -354,6 +366,8 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 DLLEXPORT int symlink(const char * target, const char * linkpath);
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
+	if (debug) fprintf(stderr, "GitBSLR: symlink(%s <- %s)\n", target, linkpath);
+	
 	if (strstr(linkpath, "/.git/"))
 	{
 		//git init (and clone) create a symlink at some random filename in .git to 'testing' for whatever reason. let it
@@ -362,13 +376,11 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	
 	string reporoot_abs = realpath_d(".");
 	
-	string target_abs;
-	
 	string target_tmp;
 	if (target[0]=='/') target_tmp = target;
 	else target_tmp = dirname_d(reporoot_abs+"/"+linkpath)+target;
 	
-	target_abs = realpath_d(target_tmp);
+	string target_abs = realpath_d(target_tmp);
 	
 	if (!target_abs)
 	{
