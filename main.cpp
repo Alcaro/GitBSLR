@@ -209,7 +209,7 @@ static string dirname_d(const string& path)
 // If that path should refer to a symlink, return what it points to (relative to the presumed link's parent directory).
 // If it doesn't exist, or shouldn't be a symlink, return a blank string.
 //The function may not call lstat or readlink, that'd yield infinite recursion. Instead, append _o and call that.
-static string resolve_symlink(const string& path)
+static string resolve_symlink(string path)
 {
 	//algorithm:
 	//if the path is inside .git/:
@@ -229,6 +229,8 @@ static string resolve_symlink(const string& path)
 	if (!path_abs) return ""; // nonexistent -> not a symlink
 	if ((path_abs+"/").contains("/.git/")) return path_linktarget; // under .git -> return truth
 	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but the actual absolute path is not.
+	if (path.startswith(root_abs+"/"))
+		path = string(path.c_str() + strlen(root_abs)+1);
 	
 	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
@@ -238,7 +240,6 @@ static string resolve_symlink(const string& path)
 	}
 	
 	
-	string ret2;
 	const char * start = path;
 	const char * iter = start;
 	
