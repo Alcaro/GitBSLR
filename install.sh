@@ -13,4 +13,8 @@ export LD_PRELOAD=$GITBSLR
 exec $GITORIG "\$@"
 EOF
 chmod +x ~/bin/git
+if [ "$(which git)" != ~/bin/git ]; then
+echo "~/bin/ is not in your PATH; fix that to complete the installation"
+else
 echo "Installed for user $USER"
+fi
