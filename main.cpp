@@ -301,7 +301,6 @@ __attribute__((constructor)) static void init()
 
 //the first thing Git does is find .git and chdir to it
 //.. and .git are never symlinks and should never be, so before chdir is called, let's not override anything
-DLLEXPORT int chdir(const char * path);
 DLLEXPORT int chdir(const char * path)
 {
 	if (debug) fprintf(stderr, "GitBSLR: chdir(%s)\n", path);
@@ -310,7 +309,6 @@ DLLEXPORT int chdir(const char * path)
 	return chdir_o(path);
 }
 
-DLLEXPORT int lstat(const char * path, struct stat* buf);
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
 	int ret = stat(path, buf);
@@ -328,7 +326,6 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return ret;
 }
 
-DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf);
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 	int ret = __xstat64(ver, path, buf);
@@ -345,7 +342,6 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	return ret;
 }
 
-DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz);
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
 	if (!initialized) return readlink_o(path, buf, bufsiz);
@@ -363,7 +359,6 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 	return nbytes;
 }
 
-DLLEXPORT int symlink(const char * target, const char * linkpath);
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
 	if (debug) fprintf(stderr, "GitBSLR: symlink(%s <- %s)\n", target, linkpath);
@@ -417,14 +412,12 @@ return -1;
 
 //I could hijack opendir and keep track of what path this DIR* is for, or I could just tell Git that we don't know the filetype.
 //The latter causes Git to fall back to some appropriate stat() variant, where I have the path easily available.
-DLLEXPORT struct dirent* readdir(DIR* dirp);
 DLLEXPORT struct dirent* readdir(DIR* dirp)
 {
 	dirent* r = readdir_o(dirp);
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
-DLLEXPORT struct dirent64* readdir64(DIR* dirp);
 DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 {
 	dirent64* r = readdir64_o(dirp);
