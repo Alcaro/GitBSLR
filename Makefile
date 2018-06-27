@@ -26,6 +26,7 @@ ifneq ($(OPT),0)
   TRUE_FLAGS += -Wl,--gc-sections,--build-id=none,--hash-style=gnu,--relax
   ifneq ($(DEBUG),1)
     TRUE_FLAGS += -s
+    CFLAGS =
   endif
 endif
 
