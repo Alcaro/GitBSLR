@@ -4,6 +4,8 @@
 
 #set -v
 
+GIT=/usr/bin/git
+
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
@@ -25,26 +27,26 @@ mkdir test/evilrepo_v1/
 cd test/evilrepo_v1/
 git init
 ln -s ../victim/ evil_symlink
-git add .
-git commit -m "GitBSLR test"
+$GIT add .
+$GIT commit -m "GitBSLR test"
 cd ../..
 
 mkdir test/evilrepo_v2/
 cd test/evilrepo_v2/
-git init
+$GIT init
 mkdir evil_symlink/
 echo echo Installing Bitcoin miner... > evil_symlink/script.sh
-git add .
-git commit -m "GitBSLR test"
+$GIT add .
+$GIT commit -m "GitBSLR test"
 cd ../..
 
 mkdir test/clone/
 cd test/clone/
 mv ../evilrepo_v1/.git ./.git
-LD_PRELOAD=../../gitbslr.so git reset --hard
+LD_PRELOAD=../../gitbslr.so $GIT reset --hard
 mv .git ../evilrepo_v1/.git
 mv ../evilrepo_v2/.git ./.git
-LD_PRELOAD=../../gitbslr.so git reset --hard
+LD_PRELOAD=../../gitbslr.so $GIT reset --hard
 mv .git ../evilrepo_v2/.git
 
 cd ../../

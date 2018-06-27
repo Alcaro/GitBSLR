@@ -37,7 +37,7 @@ template<typename T, typename... Args> static T min(const T& a, Args... args)
 
 static void malloc_fail()
 {
-	puts("GitBSLR: out of memory");
+	fprintf(stderr, "GitBSLR: out of memory\n");
 	exit(1);
 }
 
@@ -235,7 +235,7 @@ static string resolve_symlink(string path)
 	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
 	{
-		puts((string)"GitBSLR: internal error, unexpected absolute path "+path);
+		fprintf(stderr, "GitBSLR: internal error, unexpected absolute path %s\n", path.c_str());
 		exit(1);
 	}
 	
@@ -385,8 +385,7 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	if (!target_abs)
 	{
 		//TODO: figure out what this should really do
-puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
-             ", since that target doesn't exist");
+fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since that target doesn't exist", linkpath, target);
 //puts(string("A")+reporoot_abs);
 //puts(string("B")+target);
 //puts(string("C")+linkpath);
@@ -399,15 +398,14 @@ return -1;
 	
 	if ((target_abs+"/").contains("/.git/"))
 	{
-		puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
-		             ", since that's under .git/");
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since that's under .git/", linkpath, target);
 		errno = EPERM;
 		return -1;
 	}
 	else if (!reporoot_abs || !target_abs || (reporoot_abs != target_abs && !target_abs.startswith(reporoot_abs+"/")))
 	{
-		puts((string)"GitBSLR: link at "+linkpath+" is not allowed to point to "+target+
-		             ", since "+target_abs+" is not under "+reporoot_abs);
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since %s is not under %s",
+		                linkpath, target, target_abs.c_str(), reporoot_abs.c_str());
 		errno = EPERM;
 		return -1;
 	}

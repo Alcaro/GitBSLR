@@ -4,6 +4,8 @@
 
 #set -v
 
+GIT=/usr/bin/git
+
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
@@ -66,20 +68,20 @@ ln -sr test/expected/subdir1     test/expected/to_subdir1
 
 
 cd test/input/wrap/the_repo/
-git init
-#strace -E LD_PRELOAD=../../../gitbslr.so  git add . 2>&1 | tee ../../../e.log
-#strace git add . 2>&1 | tee ../../../e.log
-LD_PRELOAD=../../../../gitbslr.so git add . || exit $?
-LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-dummyeditor.py git commit || exit $?
+$GIT init
+#strace -E LD_PRELOAD=../../../gitbslr.so $GIT add . 2>&1 | tee ../../../e.log
+#strace $GIT add . 2>&1 | tee ../../../e.log
+LD_PRELOAD=../../../../gitbslr.so $GIT add . || exit $?
 #this could simply be
-#git commit -m "GitBSLR test" || exit $?
-#but I want this as a regression test
+#$GIT commit -m "GitBSLR test" || exit $?
+#but I want this to ensure 
+LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-dummyeditor.py $GIT commit || exit $?
 cd ../../../../
 
 mkdir test/output/
 mv test/input/wrap/the_repo/.git test/output/.git
 cd test/output/
-LD_PRELOAD= git reset --hard HEAD
+$GIT reset --hard HEAD
 cd ../../
 
 cd test/output/
