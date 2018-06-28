@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
 make OPT=1 || exit $?

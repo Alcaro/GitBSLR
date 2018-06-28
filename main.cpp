@@ -1,5 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-// GitBSLR is available under the same license as Git itself.
+// SPDX-License-Identifier: GPL-2.0-only
+// GitBSLR is available under the same license as Git itself. If Git relicenses, you may choose
+// whether to use GitBSLR under GPL2 or Git's new license.
 
 #include <stdio.h>
 #include <stdlib.h>
