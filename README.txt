@@ -10,7 +10,7 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
 - Symlinks to anywhere inside the repo are still symlinks (by default).
 - Symlinks to outside the repo are treated as their contents.
 - If inlining a symlink would yield a loop (for example symlinks to the repo's parent directory), the loop point is treated as a symlink.
-- If multiple symlinks lead to the same outside-repo place, you may end up with duplicate files in the repo.
+- If multiple symlinks lead to the same place, you may end up with duplicate files in the repo.
 - Interaction with Git's cross-filesystem detector is untested.
 - Interaction with submodules, --git-dir, and other rare features, is untested.
 - Unix only (only Linux tested), no Windows support (but symlinks require root on Windows anyways).
@@ -30,11 +30,16 @@ Configuration: GitBSLR obeys a few environment variables, which can be set per-i
       Git-attempted operation (which indicates a host-specific or malicious repository, or a GitBSLR
       bug).
 - GITBSLR_FOLLOW (currently unimplemented)
-    A colon-separated list of paths (absolute, or relative to the repo root). Any listed symlink
-      will be inlined, even if it points to inside the repository (links pointing outside will
-      always be followed).
-    If the path starts with !, it causes the non-inlining of a symlink listed earlier. The paths
-      should be in order from least to most specific; the last match applies.
+    A colon-separated list of paths (absolute, or relative to the repo root).
+    'path/link' or 'path/link/' will cause 'path/link' to be inlined. If it's not a symlink, or not
+      in the repo, the entry will be silently ignored.
+    'path/link/*' will cause every symlink under path/link/ to be inlined. Paths are relative to the
+      actual filesystem, not how Git sees it; if path/link/ itself is a symlink, it has no children,
+      and this entry won't do anything.
+    Nonexistent files, non-symlinks, absolute paths not included in the repo, and other strange
+      input, is silently ignored.
+    If the path starts with !, it causes the non-inlining of a symlink listed earlier. The last
+      match applies, so paths should probably be in order from least to most specific.
     Note that symlinks that (after inlining) point to one of their parent directories will remain as
       symlinks, to avoid infinite loops.
 

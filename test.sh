@@ -60,8 +60,6 @@ ln -sr test/expected/to_outside2 test/expected/to_outside2/further_outside/wrap
 echo file4 >                     test/expected/to_outside2/file4
 mkdir                            test/expected/to_outside2/subdir3/
 echo file5 >                     test/expected/to_outside2/subdir3/file5
-#Change these two lines if you choose to not inline absolute symlinks.
-#ln -s  /bin/sh                   test/expected/to_bin_sh
 cp     /bin/sh                   test/expected/to_bin_sh
 ln -sr test/expected/file3       test/expected/to_file3
 ln -sr test/expected/subdir1     test/expected/to_subdir1
@@ -74,7 +72,7 @@ $GIT init
 LD_PRELOAD=../../../../gitbslr.so $GIT add . || exit $?
 #this could simply be
 #$GIT commit -m "GitBSLR test" || exit $?
-#but I want this to ensure 
+#but I want this to ensure issue #1 doesn't regress
 LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-dummyeditor.py $GIT commit || exit $?
 cd ../../../../
 

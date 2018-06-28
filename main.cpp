@@ -14,11 +14,11 @@
 #include <unistd.h>
 
 class anyptr {
-void* data;
+	void* data;
 public:
-template<typename T> anyptr(T* data_) { data=(void*)data_; }
-template<typename T> operator T*() { return (T*)data; }
-template<typename T> operator const T*() const { return (const T*)data; }
+	template<typename T> anyptr(T* data_) { data=(void*)data_; }
+	template<typename T> operator T*() { return (T*)data; }
+	template<typename T> operator const T*() const { return (const T*)data; }
 };
 
 template<typename T> static T min(const T& a) { return a; }
@@ -43,14 +43,14 @@ static void malloc_fail()
 
 static anyptr malloc_check(size_t size)
 {
-	void* ret=malloc(size);
+	void* ret = malloc(size);
 	if (size && !ret) malloc_fail();
 	return ret;
 }
 
 static anyptr realloc_check(anyptr ptr, size_t size)
 {
-	void* ret=realloc(ptr, size);
+	void* ret = realloc(ptr, size);
 	if (size && !ret) malloc_fail();
 	return ret;
 }
