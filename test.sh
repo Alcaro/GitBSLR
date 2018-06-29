@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
-#set -v
+set -euo pipefail
 
 GIT=/usr/bin/git
 
@@ -83,10 +83,10 @@ $GIT reset --hard HEAD
 cd ../../
 
 cd test/output/
-find -printf '%p -> %l\n' | grep -v .git | sort > ../output.log
+find -printf '%p -> %l\n' | grep -v .git | LC_ALL=C sort > ../output.log
 cd ../../
 cd test/expected/
-find -printf '%p -> %l\n' | grep -v .git | sort > ../expected.log
+find -printf '%p -> %l\n' | grep -v .git | LC_ALL=C sort > ../expected.log
 cd ../../
 
 diff -u999 test/output.log test/expected.log && echo Test passed; exit $?

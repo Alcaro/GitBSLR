@@ -7,6 +7,6 @@
 import os
 import sys
 os.chdir(".")
-os.readlink("/proc/self/exe")
+os.readlink("/proc/self/exe")  # just some random absolute path not under /usr/share/git-core/
 
-open(sys.argv[1],"wt").write("GitBSLR test")
+open(sys.argv[1], "wt").write("GitBSLR test")

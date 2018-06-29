@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // GitBSLR is available under the same license as Git itself. If Git relicenses, you may choose
-// whether to use GitBSLR under GPL2 or Git's new license.
+//    whether to use GitBSLR under GPL2 or Git's new license.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,24 +17,14 @@
 class anyptr {
 	void* data;
 public:
-	template<typename T> anyptr(T* data_) { data=(void*)data_; }
+	template<typename T> anyptr(T* data_) { data = (void*)data_; }
 	template<typename T> operator T*() { return (T*)data; }
 	template<typename T> operator const T*() const { return (const T*)data; }
 };
 
-template<typename T> static T min(const T& a) { return a; }
-template<typename T, typename... Args> static T min(const T& a, Args... args)
-{
-	const T& b = min(args...);
-	if (a < b) return a;
-	else return b;
-}
+template<typename T> static T min(const T& a, const T& b) { return a < b ? a : b; }
 
 #define DLLEXPORT extern "C" __attribute__((__visibility__("default")))
-
-#undef malloc
-#undef realloc
-#undef calloc
 
 static void malloc_fail()
 {
@@ -205,11 +195,63 @@ static string dirname_d(const string& path)
 }
 
 //Input:
-// A path to a file, relative to the Git repo root, usable with stat() or readlink().
+// A path to a symlink, both repo-relative and absolute, no trailing slash.
+// (Yes, duplicate input is silly, but the caller already has easy access to both paths.)
 //Output:
-// If that path should refer to a symlink, return what it points to (relative to the presumed link's parent directory).
+// Whether GITBSLR_FOLLOW says that path should be inlined. False = it's a link.
+static bool link_force_inlined(const string& path_rel, const string& path_abs)
+{
+	const char * rules = getenv("GITBSLR_FOLLOW");
+	if (!rules) return false;
+	if (!*rules) return false;
+	
+	bool ret = false; // no matching rule -> default to keeping it as a link
+	
+	while (true)
+	{
+		const char * next = strchrnul(rules, ':');
+		const char * end = next;
+		
+		bool ret_this = true;
+		bool wildcard = false;
+		if (*rules == '!') { rules++; ret_this = false; }
+		
+		if (*rules == ':')
+		{
+			fprintf(stderr, "GitBSLR: empty GITBSLR_FOLLOW entries are not allowed");
+			exit(1);
+		}
+		
+		// this intentionally accepts * as an entry
+		if (end > rules && end[-1] == '*')
+		{
+			end--;
+			wildcard = true;
+			
+			if (end > rules && end[-1] != '/')
+			{
+				fprintf(stderr, "GitBSLR: GITBSLR_FOLLOW entries can't end with * unless they end with /*");
+				exit(1);
+			}
+		}
+		
+		if (end > rules && end[-1] == '/') end--; // ignore trailing slashes
+		
+		// keep running if the rule matches, so the last one wins
+		if (memcmp(path_rel.c_str(), rules, end-rules)==0 && (wildcard || (size_t)(end-rules) == path_rel.length())) ret = ret_this;
+		if (memcmp(path_abs.c_str(), rules, end-rules)==0 && (wildcard || (size_t)(end-rules) == path_abs.length())) ret = ret_this;
+		
+		if (!*next) return ret;
+		rules = next+1;
+	}
+}
+
+//Input:
+// A file path, without trailing slash.
+//Output:
+// If that path should refer to a symlink, return what it points to, relative to the presumed link's parent directory.
 // If it doesn't exist, or shouldn't be a symlink, return a blank string.
-//The function may not call lstat or readlink, that'd yield infinite recursion. Instead, append _o and call that.
+//The function may not call lstat or readlink, that'd yield infinite recursion. It may call readlink_o, which is the real readlink from libc.
 static string resolve_symlink(string path)
 {
 	//algorithm:
@@ -218,20 +260,20 @@ static string resolve_symlink(string path)
 	//for each prefix of the path:
 	// if path is the same thing as prefix (realpath identical):
 	//  it's a link
-	// if path is a link, and points to inside prefix:
-	//  it's a link
+	// if path is a link, points to inside prefix, and GITBSLR_FOLLOW doesn't say to inline it:
+	//  it's a link (but check realpath of all prefixes to determine where it leads)
 	//otherwise, it's not a link
 	
 	string path_linktarget = readlink_d(path);
 	
 	string root_abs = realpath_d(".");
 	
-	string path_abs = realpath_d(path);
+	string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
 	if (!path_abs) return ""; // nonexistent -> not a symlink
 	if ((path_abs+"/").contains("/.git/")) return path_linktarget; // under .git -> return truth
 	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but the actual absolute path is not.
 	if (path.startswith(root_abs+"/"))
-		path = string(path.c_str() + strlen(root_abs)+1);
+		path = string(path.c_str() + strlen(root_abs)+1); // if path is absolute and in the repo, turn it relative to repo root and check that
 	
 	if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
 	if (path[0] == '/')
@@ -244,6 +286,8 @@ static string resolve_symlink(string path)
 	const char * start = path;
 	const char * iter = start;
 	
+	bool target_is_in_repo = false;
+	
 	while (true)
 	{
 		const char * next = strchrnul(iter+1, '/');
@@ -252,8 +296,10 @@ static string resolve_symlink(string path)
 		if (newpath == "") newpath = ".";
 		string newpath_abs = realpath_d(newpath);
 		
+		// if this path is the same as the link target,
 		if (newpath_abs == path_abs)
 		{
+			// it's a link
 			if (!*next) return ".";
 			string ret;
 			while (*next)
@@ -264,14 +310,19 @@ static string resolve_symlink(string path)
 			return string(ret, ret.length()-1);
 		}
 		
+		//if it's originally a symlink, and points to inside the repo,
+		//it's a candidate for inlining - but the above check overrides it, if necessary
 		if (path_linktarget && path_abs.startswith(newpath_abs+"/"))
-		{
-			return path_linktarget;
-		}
+			target_is_in_repo = true;
 		
 		iter = next;
 		
-		if (!*iter) return "";
+		if (!*iter)
+		{
+			if (!target_is_in_repo) return ""; // if it'd point outside the repo, it's not a link
+			if (link_force_inlined(path, root_abs+"/"+path)) return ""; // if GITBSLR_FOLLOW says inline, it's not a link
+			return path_linktarget;
+		}
 	}
 }
 
@@ -313,7 +364,7 @@ DLLEXPORT int chdir(const char * path)
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
 	int ret = stat(path, buf);
-	if (ret<0 || !initialized) return ret;
+	if (!initialized || ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
@@ -330,7 +381,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 	int ret = __xstat64(ver, path, buf);
-	if (ret<0 || !initialized) return ret;
+	if (!initialized || ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
@@ -411,7 +462,7 @@ return -1;
 	}
 }
 
-//I could hijack opendir and keep track of what path this DIR* is for, or I could just tell Git that we don't know the filetype.
+//I could hijack opendir and keep track of what path this DIR* is for, or I could tell Git that we don't know the filetype.
 //The latter causes Git to fall back to some appropriate stat() variant, where I have the path easily available.
 DLLEXPORT struct dirent* readdir(DIR* dirp)
 {

@@ -7,10 +7,10 @@ But there's no real answer, only things that haven't worked since Git 1.6.1 (Sep
   workarounds.
 
 So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
-- Symlinks to anywhere inside the repo are still symlinks (by default).
 - Symlinks to outside the repo are treated as their contents.
+- To avoid duplicate files, symlinks to anywhere inside the repo are still symlinks. If you want to follow all links, use GITBSLR_FOLLOW.
 - If inlining a symlink would yield a loop (for example symlinks to the repo's parent directory), the loop point is treated as a symlink.
-- If multiple symlinks lead to the same place, you may end up with duplicate files in the repo.
+- If a file is accessible via multiple paths, you may end up with duplicate files in the repo. This may make pulls unreasonably annoying.
 - Interaction with Git's cross-filesystem detector is untested.
 - Interaction with submodules, --git-dir, and other rare features, is untested.
 - Unix only (only Linux tested), no Windows support (but symlinks require root on Windows anyways).
@@ -27,21 +27,22 @@ install.sh will do steps 3 and 4 for you.
 Configuration: GitBSLR obeys a few environment variables, which can be set per-invocation, or permanently in the wrapper script:
 - GITBSLR_DEBUG
     If set, GitBSLR prints everything it does. If not, GitBSLR emits output only if it prevents a
-      Git-attempted operation (which indicates a host-specific or malicious repository, or a GitBSLR
-      bug).
+      Git-attempted operation (which indicates a GitBSLR bug, or a host-specific or malicious
+      repository).
 - GITBSLR_FOLLOW (currently unimplemented)
-    A colon-separated list of paths (absolute, or relative to the repo root).
-    'path/link' or 'path/link/' will cause 'path/link' to be inlined. If it's not a symlink, or not
-      in the repo, the entry will be silently ignored.
-    'path/link/*' will cause every symlink under path/link/ to be inlined. Paths are relative to the
-      actual filesystem, not how Git sees it; if path/link/ itself is a symlink, it has no children,
-      and this entry won't do anything.
-    Nonexistent files, non-symlinks, absolute paths not included in the repo, and other strange
-      input, is silently ignored.
-    If the path starts with !, it causes the non-inlining of a symlink listed earlier. The last
-      match applies, so paths should probably be in order from least to most specific.
-    Note that symlinks that (after inlining) point to one of their parent directories will remain as
-      symlinks, to avoid infinite loops.
+    A colon-separated list of paths, as seen by Git, optionally prefixed with the absolute path to
+      the repo.
+    'path/link' or 'path/link/' will cause 'path/link' to be inlined. If path/link is nonexistent,
+      not a symlink, or is outside the repo, the entry will be silently ignored.
+    'path/link/*' will cause path/link/, and every symlink accessible under that path, to be
+      inlined. '*' is a valid value and will cause exactly everything to be inlined.
+    This applies only to paths as seen by Git; . and .. components are invalid, and symlinks inside
+      paths are not followed.
+    If the path is prefixed with !, it causes the non-inlining of an otherwise listed symlink. The
+      last match applies, so paths should probably be in order from least to most specific.
+    If using this, you may want to .gitignore the symlink target, to avoid duplicate files.
+    Symlinks that (after inlining) point to one of their parent directories will remain as symlinks,
+      to avoid infinite loops.
 
 GitBSLR will not automatically deduplicate anything, or otherwise create any symlinks for Git to
   follow. You have to create the symlinks yourself.

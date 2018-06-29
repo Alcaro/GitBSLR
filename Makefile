@@ -11,10 +11,8 @@ endif
 CFLAGS = -g
 CXXFLAGS = $(CFLAGS)
 
-TRUE_FLAGS := -std=c++11 -fno-rtti -fvisibility=hidden
+TRUE_FLAGS := -std=c++98 -fno-rtti -fvisibility=hidden
 TRUE_FLAGS += -fvisibility=hidden -Wall -Wmissing-declarations -pipe -fno-exceptions
-#TODO: remove this one
-TRUE_FLAGS += -Wno-comment
 TRUE_FLAGS += -fPIC -ldl -Wl,-z,relro,-z,now,--no-undefined -shared
 
 ifneq ($(OPT),0)
@@ -36,4 +34,4 @@ gitbslr.so: main.cpp
 	$(CXX) $+ $(TRUE_FLAGS) -o $@ -lm
 
 clean:
-	rm -f gitbslr.so
+	rm gitbslr.so
