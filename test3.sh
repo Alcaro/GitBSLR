@@ -34,7 +34,14 @@ mkdir                     test/input/sub3/
 ln -sr test/input/sub1/   test/input/sub3/to_sub1
 echo file3 >              test/input/sub3/file3
 
-export GITBSLR_FOLLOW="sub1/*:!sub1/to_sub2:$(pwd)/test/input/sub2/to_sub1/"
+#ensure a /* inlines the indicated link too
+mkdir                     test/input/sub4/
+mkdir                     test/input/sub5/
+echo file4 >              test/input/sub5/file4
+ln -sr test/input/sub5/   test/input/sub4/to_sub5
+ln -sr test/input/sub4/   test/input/to_sub4
+
+export GITBSLR_FOLLOW="sub1/*:!sub1/to_sub2:$(pwd)/test/input/sub2/to_sub1/:to_sub4/*"
 
 
 #expected output:
@@ -64,6 +71,14 @@ ln -sr test/expected/sub2/                test/expected/sub2/to_sub2
 mkdir                                     test/expected/sub3/
 ln -sr test/expected/sub1/                test/expected/sub3/to_sub1
 echo file3 >                              test/expected/sub3/file3
+
+mkdir                                     test/expected/sub4/
+mkdir                                     test/expected/sub5/
+echo file4 >                              test/expected/sub5/file4
+ln -sr test/expected/sub5/                test/expected/sub4/to_sub5
+mkdir                                     test/expected/to_sub4/
+mkdir                                     test/expected/to_sub4/to_sub5
+echo file4 >                              test/expected/to_sub4/to_sub5/file4
 
 
 cd test/input/

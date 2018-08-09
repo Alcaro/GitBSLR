@@ -10,11 +10,11 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
 - Symlinks to outside the repo are treated as their contents.
 - To avoid duplicate files, symlinks to anywhere inside the repo are still symlinks. If you want to follow all links, use GITBSLR_FOLLOW.
 - If inlining a symlink would yield a loop (for example symlinks to the repo's parent directory), the loop point is treated as a symlink.
-- If a file is accessible via multiple paths, you may end up with duplicate files in the repo. This may make pulls unreasonably annoying.
+- If a file is accessible via multiple paths, you may end up with duplicate files in the repo. This may make 'git pull' annoying.
 - Interaction with Git's cross-filesystem detector is untested.
 - Interaction with submodules, --git-dir, and other rare features, is untested.
 - Unix only (only Linux tested), no Windows support (but symlinks require root on Windows anyways).
-- For security reasons, this device prevents Git from creating symlinks to outside the repo. See test2.sh for details.
+- For security reasons, GitBSLR prevents Git from creating symlinks to outside the repo. See test2.sh for details.
 
 To enable GitBSLR on your machine:
 (1) Install a Unix-like operating system; only tested under Linux, but others will probably work (if not, report the bug)
@@ -26,10 +26,10 @@ install.sh will do steps 3 and 4 for you.
 
 Configuration: GitBSLR obeys a few environment variables, which can be set per-invocation, or permanently in the wrapper script:
 - GITBSLR_DEBUG
-    If set, GitBSLR prints everything it does. If not, GitBSLR emits output only if it prevents a
-      Git-attempted operation (which indicates a GitBSLR bug, or a host-specific or malicious
-      repository).
-- GITBSLR_FOLLOW (currently unimplemented)
+    If set, GitBSLR prints everything it does. If not, GitBSLR emits output only if it detects an
+      error (i.e. Git trying to create symlinks to outside the repo, bad GitBSLR configuration, or a
+      GitBSLR bug).
+- GITBSLR_FOLLOW
     A colon-separated list of paths, as seen by Git, optionally prefixed with the absolute path to
       the repo.
     'path/link' or 'path/link/' will cause 'path/link' to be inlined. If path/link is nonexistent,
@@ -52,4 +52,4 @@ For security reasons, it's not recommended to enable GitBSLR non-globally; if va
   disappointed. GitBSLR refuses to create symlinks to outside the repo, but vanilla Git can do it.
   This also applies to repositories cloned prior to installing GitBSLR; if you think they may be
   malicious, check for unexpected symlinks before using GitBSLR there, or delete and reclone. The
-  GitBSLR configuration can safely be varied between invocations.
+  GitBSLR configuration can safely be varied between repositories and invocations.
