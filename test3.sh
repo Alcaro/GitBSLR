@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
-set -euo pipefail
+#dash doesn't support pipefail
+set -eu
 
 GIT=/usr/bin/git
 

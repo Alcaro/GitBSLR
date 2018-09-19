@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
-set -euo pipefail
+#dash doesn't support pipefail
+set -eu
 
 GIT=/usr/bin/git
 
@@ -72,7 +73,7 @@ $GIT init
 LD_PRELOAD=../../../../gitbslr.so $GIT add . || exit $?
 #this could simply be
 #$GIT commit -m "GitBSLR test" || exit $?
-#but I want this to ensure issue #1 doesn't regress
+#but I want this to ensure https://github.com/Alcaro/GitBSLR/issues/1 doesn't regress
 LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-dummyeditor.py $GIT commit || exit $?
 cd ../../../../
 

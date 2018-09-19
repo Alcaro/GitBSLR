@@ -1,8 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
-set -euo pipefail
+#dash doesn't support pipefail
+set -eu
 
 GIT=/usr/bin/git
 
@@ -18,6 +19,9 @@ mkdir test/ || exit $?
 # else must be changed. The only available option is preventing Git from creating symlinks to outside the repo root.
 #The simplest and most effective way would be returning an error. The most appropriate one would be EPERM,
 # "The filesystem containing linkpath does not support the creation of symbolic links."
+#(Git claims to support filesystems not supporting symlinks, but that just replaces the links with
+# plaintext files containing their target, aka silently corrupting the tree. Better tell Git we
+# support links, causing it to show the unexpected error to the user.)
 
 
 mkdir test/victim/

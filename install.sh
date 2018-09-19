@@ -1,6 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
+
+#dash doesn't support pipefail
+set -eu
 
 make OPT=1 || exit $?
 
@@ -22,6 +25,7 @@ fi
 cp $(readlink -f $(dirname $0))/gitbslr.so ~/bin/gitbslr.so
 
 #TODO: make this append to LD_PRELOAD if one is already set
+#(also requires making the initialization unsetenv remove GitBSLR only)
 cat > ~/bin/git << EOF
 #!/bin/sh
 export LD_PRELOAD=$HOME/bin/gitbslr.so
@@ -33,7 +37,6 @@ chmod -x ~/bin/gitbslr.so
 
 if [ "$(which git)" != ~/bin/git ]; then
   echo "warning: installed to ~/bin/git, but ~/bin/ is not in your PATH (or another Git is in front of ~/bin/); fix that to complete the installation"
-  exit 1
 else
   echo "Installed for user $USER"
 fi
