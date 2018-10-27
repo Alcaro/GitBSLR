@@ -35,3 +35,8 @@ gitbslr.so: main.cpp
 
 clean:
 	rm gitbslr.so
+
+install:
+	./install.sh
+uninstall:
+	./install.sh uninstall

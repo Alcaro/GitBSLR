@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo "Not needed, just use 'make'."
