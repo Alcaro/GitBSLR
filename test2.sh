@@ -37,10 +37,21 @@ export GITBSLR_DEBUG=1
 
 ln_sr()
 {
-  #Perl is slow, but anything else I could find requires Bash, or other programs less guaranteed to exist
+  #Perl is no beauty, but anything else I could find requires Bash, or other programs not guaranteed to exist
   ln -sr $1 $2 || perl -e'use File::Spec; use File::Basename;
                           symlink File::Spec->abs2rel($ARGV[0], dirname($ARGV[1])), $ARGV[1] or
                               die qq{cannot create symlink: $!$/}' $1 $2
+}
+
+tree()
+{
+  perl -e '
+    use File::Find qw(finddepth);
+    my @files;
+    finddepth(sub {
+      print $File::Find::name, " -> ", readlink($File::Find::name), "\n";
+    }, $ARGV[0]);
+    ' $1 | sed s%$1%% | grep -v .git | LC_ALL=C sort
 }
 
 #With GitBSLR installed, Git can end up writing to outside the repository directory. If a pulled
