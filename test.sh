@@ -21,7 +21,7 @@ case $(uname -s) in
     GITBSLR=$(pwd)/gitbslr.dylib
     gitbslr()
     {
-      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+      DYLD_PRINT_LIBRARIES=1 X=1 DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
     }
   ;;
   *)
