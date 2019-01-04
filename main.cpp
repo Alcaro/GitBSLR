@@ -427,8 +427,6 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
-puts("RL");
-puts(path);
 	if (!initialized) return readlink_o(path, buf, bufsiz);
 	
 	string newpath = resolve_symlink(path);
