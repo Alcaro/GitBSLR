@@ -165,12 +165,16 @@ public:
 
 
 typedef int (*chdir_t)(const char * path);
+typedef int (*lstat_t)(const char * path, struct stat* buf);
+typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
 typedef struct dirent64* (*readdir64_t)(DIR* dirp);
-typedef int (*symlink_t)(const char *target, const char *linkpath);
+typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static chdir_t chdir_o;
+static lstat_t lstat_o;
+static __lxstat64_t __lxstat64_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
 static readdir64_t readdir64_o;
@@ -283,8 +287,8 @@ static string resolve_symlink(string path)
 	string root_abs = realpath_d(".");
 	
 	string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
-	if (!path_abs) return ""; // nonexistent -> not a symlink
 	if ((path_abs+"/").contains("/.git/")) return path_linktarget; // under .git -> return truth
+	if (!path_abs) return ""; // nonexistent -> not a symlink (do not put above the .git check, git init creates a symlink to nonexistent)
 	if (path == root_abs) return ""; // repo root is not a link; there can be links to repo root, but the actual absolute path is not.
 	if (path.startswith(root_abs+"/"))
 		path = string(path.c_str() + strlen(root_abs)+1); // if path is absolute and in the repo, turn it relative to repo root and check that
@@ -349,6 +353,8 @@ static bool debug = false;
 __attribute__((constructor)) static void init()
 {
 	chdir_o = (chdir_t)dlsym(RTLD_NEXT, "chdir");
+	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
+	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
@@ -377,6 +383,9 @@ DLLEXPORT int chdir(const char * path)
 
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
+	if (strstr(path, "/.git/")) // for git init
+		return lstat_o(path, buf);
+	
 	int ret = stat(path, buf);
 	if (!initialized || ret<0) return ret;
 	
@@ -395,6 +404,12 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 #ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
+	// http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html says version must be 3, but Git uses 1
+	// most likely struct stat64 changing - I don't really care what that struct is, I care only about which path to (l)stat
+	
+	if (strstr(path, "/.git/")) // for git init
+		return __lxstat64_o(ver, path, buf);
+	
 	int ret = __xstat64(ver, path, buf);
 	if (!initialized || ret<0) return ret;
 	
@@ -412,10 +427,12 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
+puts("RL");
+puts(path);
 	if (!initialized) return readlink_o(path, buf, bufsiz);
 	
 	string newpath = resolve_symlink(path);
-	if (debug) fprintf(stderr, "GitBSLR: readlink(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
+	if (debug) fprintf(stderr, "GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
 	if (!newpath)
 	{
 		errno = EINVAL;

@@ -5,7 +5,9 @@
 #dash doesn't support pipefail
 set -eu
 
+#must NOT contain GitBSLR
 GIT=/usr/bin/git
+export GITBSLR_DEBUG=1
 
 cd $(dirname $0)
 make || exit $?

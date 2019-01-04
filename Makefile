@@ -44,4 +44,5 @@ test: gitbslr.so
 	sh test.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test2.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test3.sh | tee /dev/stderr | grep -q 'Test passed'
+	echo All tests passed
 .PHONY: test

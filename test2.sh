@@ -5,7 +5,9 @@
 #dash doesn't support pipefail
 set -eu
 
+#must NOT contain GitBSLR
 GIT=/usr/bin/git
+export GITBSLR_DEBUG=1
 
 cd $(dirname $0)
 make || exit $?
@@ -29,10 +31,10 @@ echo echo Test passed > test/victim/script.sh
 mkdir test/evilrepo_v1/
 
 cd test/evilrepo_v1/
-git init
+$GIT init
 ln -s ../victim/ evil_symlink
 $GIT add .
-$GIT commit -m "GitBSLR test"
+$GIT commit -m "GitBSLR test part 1"
 cd ../..
 
 mkdir test/evilrepo_v2/
@@ -41,16 +43,16 @@ $GIT init
 mkdir evil_symlink/
 echo echo Installing Bitcoin miner... > evil_symlink/script.sh
 $GIT add .
-$GIT commit -m "GitBSLR test"
+$GIT commit -m "GitBSLR test part 2"
 cd ../..
 
 mkdir test/clone/
 cd test/clone/
 mv ../evilrepo_v1/.git ./.git
-LD_PRELOAD=../../gitbslr.so $GIT reset --hard
+LD_PRELOAD=../../gitbslr.so $GIT reset --hard || true # supposed to fail, shouldn't hit -e
 mv .git ../evilrepo_v1/.git
 mv ../evilrepo_v2/.git ./.git
-LD_PRELOAD=../../gitbslr.so $GIT reset --hard || true # supposed to fail, shouldn't hit -e
+LD_PRELOAD=../../gitbslr.so $GIT reset --hard
 mv .git ../evilrepo_v2/.git
 
 cd ../../

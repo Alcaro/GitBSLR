@@ -5,7 +5,9 @@
 #dash doesn't support pipefail
 set -eu
 
+#must NOT contain GitBSLR
 GIT=/usr/bin/git
+export GITBSLR_DEBUG=1
 
 cd $(dirname $0)
 make || exit $?
@@ -67,7 +69,9 @@ ln -sr test/expected/subdir1     test/expected/to_subdir1
 
 
 cd test/input/wrap/the_repo/
-$GIT init
+LD_PRELOAD=../../../../gitbslr.so $GIT init
+grep -q 'symlinks = false' .git/config && echo Error: No symlink support
+grep -q 'symlinks = false' .git/config && exit 1
 #strace -E LD_PRELOAD=../../../gitbslr.so $GIT add . 2>&1 | tee ../../../e.log
 #strace $GIT add . 2>&1 | tee ../../../e.log
 LD_PRELOAD=../../../../gitbslr.so $GIT add . || exit $?
