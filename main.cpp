@@ -14,8 +14,36 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define DLLEXPORT extern "C" __attribute__((__visibility__("default")))
+
+#define OSX_WORKAROUNDS 0
 #if defined(__linux__)
 # define HAVE_DIRENT64
+#elif defined(__APPLE__) && defined(__MACH__)
+# undef OSX_WORKAROUNDS
+# define OSX_WORKAROUNDS 1
+
+// https://stackoverflow.com/questions/34114587/dyld-library-path-dyld-insert-libraries-not-working
+// why must you claim to be unix-like, yet be so different
+
+#define DYLD_INTERPOSE(_replacment,_replacee) \
+ __attribute__((used)) static struct { const void* replacment; const void* replacee; } _interpose_##_replacee \
+ __attribute__ ((section ("__DATA,__interpose"))) = { (const void*)(unsigned long)&_replacment, (const void*)(unsigned long)&_replacee };
+
+static int chdir_o(const char * path) { return chdir(path); }
+static int lstat_o(const char * path, struct stat* buf) { return lstat(path, buf); }
+static ssize_t readlink_o(const char * path, char * buf, size_t bufsiz) { return readlink(path, buf, bufsiz); }
+static struct dirent* readdir_o(DIR* dirp) { return readdir(dirp); }
+static int symlink_o(const char * target, const char * linkpath) { return symlink(target, linkpath); }
+
+#define chdir my_chdir
+#define lstat my_lstat
+#define readlink my_readlink
+#define symlink my_symlink
+#define readdir my_readdir
+#undef DLLEXPORT
+#define DLLEXPORT static
+
 #else
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
 #endif
@@ -37,8 +65,6 @@ static const char * strchrnul(const char * s, int c)
 #endif
 
 template<typename T> static T min(const T& a, const T& b) { return a < b ? a : b; }
-
-#define DLLEXPORT extern "C" __attribute__((__visibility__("default")))
 
 static void malloc_fail()
 {
@@ -164,21 +190,26 @@ public:
 
 
 
+#if !OSX_WORKAROUNDS
 typedef int (*chdir_t)(const char * path);
 typedef int (*lstat_t)(const char * path, struct stat* buf);
-typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
-typedef struct dirent64* (*readdir64_t)(DIR* dirp);
 typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static chdir_t chdir_o;
 static lstat_t lstat_o;
-static __lxstat64_t __lxstat64_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
-static readdir64_t readdir64_o;
 static symlink_t symlink_o;
+
+#ifdef HAVE_DIRENT64
+typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
+typedef struct dirent64* (*readdir64_t)(DIR* dirp);
+static __lxstat64_t __lxstat64_o;
+static readdir64_t readdir64_o;
+#endif
+#endif
 
 
 static string readlink_d(const string& path)
@@ -352,16 +383,23 @@ static bool debug = false;
 
 __attribute__((constructor)) static void init()
 {
+#if !OSX_WORKAROUNDS
 	chdir_o = (chdir_t)dlsym(RTLD_NEXT, "chdir");
 	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
-	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
+#ifdef HAVE_DIRENT64
+	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
+	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
+#endif
+#endif
 	
 	//GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
+#if OSX_WORKAROUNDS
+	//unsetenv("DYLD_INSERT_LIBRARIES"); // TODO: ensure absense of this one is detected
+#endif
 	
 	if (getenv("GITBSLR_DEBUG"))
 	{
@@ -509,4 +547,12 @@ DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
+#endif
+
+#if OSX_WORKAROUNDS
+DYLD_INTERPOSE(my_chdir, chdir)
+DYLD_INTERPOSE(my_lstat, lstat)
+DYLD_INTERPOSE(my_readlink, readlink)
+DYLD_INTERPOSE(my_symlink, symlink)
+DYLD_INTERPOSE(my_readdir, readdir)
 #endif

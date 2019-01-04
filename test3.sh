@@ -18,7 +18,6 @@ git()
 }
 case $(uname -s) in
   Darwin*)
-    #why must you claim to be unix-like, yet be so different
     GITBSLR=$(pwd)/gitbslr.dylib
     gitbslr()
     {

@@ -18,11 +18,10 @@ git()
 }
 case $(uname -s) in
   Darwin*)
-    #why must you claim to be unix-like, yet be so different
     GITBSLR=$(pwd)/gitbslr.dylib
     gitbslr()
     {
-      DYLD_FORCE_FLAT_NAMESPACE=1 DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
     }
   ;;
   *)
