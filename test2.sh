@@ -5,15 +5,35 @@
 #dash doesn't support pipefail
 set -eu
 
-#must NOT contain GitBSLR
-GIT=/usr/bin/git
-export GITBSLR_DEBUG=1
-
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
 [ -e test/ ] && exit 1
 mkdir test/ || exit $?
+
+GIT=/usr/bin/git
+git()
+{
+  $GIT "$@"
+}
+case $(uname -s) in
+  Darwin*)
+    #why must you claim to be unix-like, yet be so different
+    GITBSLR=$(pwd)/gitbslr.dylib
+    gitbslr()
+    {
+      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+    }
+  ;;
+  *)
+    GITBSLR=$(pwd)/gitbslr.so
+    gitbslr()
+    {
+      LD_PRELOAD=$GITBSLR $GIT "$@"
+    }
+  ;;
+esac
+export GITBSLR_DEBUG=1
 
 #With GitBSLR installed, Git can end up writing to outside the repository directory. If a pulled
 # repository is malicious, this can cause remote code execution, for example by scribbling across your .bashrc.
@@ -31,28 +51,28 @@ echo echo Test passed > test/victim/script.sh
 mkdir test/evilrepo_v1/
 
 cd test/evilrepo_v1/
-$GIT init
+git init
 ln -s ../victim/ evil_symlink
-$GIT add .
-$GIT commit -m "GitBSLR test part 1"
+git add .
+git commit -m "GitBSLR test part 1"
 cd ../..
 
 mkdir test/evilrepo_v2/
 cd test/evilrepo_v2/
-$GIT init
+git init
 mkdir evil_symlink/
 echo echo Installing Bitcoin miner... > evil_symlink/script.sh
-$GIT add .
-$GIT commit -m "GitBSLR test part 2"
+git add .
+git commit -m "GitBSLR test part 2"
 cd ../..
 
 mkdir test/clone/
 cd test/clone/
 mv ../evilrepo_v1/.git ./.git
-LD_PRELOAD=../../gitbslr.so $GIT reset --hard || true # supposed to fail, shouldn't hit -e
+gitbslr reset --hard || true # supposed to fail, shouldn't hit -e
 mv .git ../evilrepo_v1/.git
 mv ../evilrepo_v2/.git ./.git
-LD_PRELOAD=../../gitbslr.so $GIT reset --hard
+gitbslr reset --hard
 mv .git ../evilrepo_v2/.git
 
 cd ../../

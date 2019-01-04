@@ -5,17 +5,37 @@
 #dash doesn't support pipefail
 set -eu
 
-#must NOT contain GitBSLR
-GIT=/usr/bin/git
-export GITBSLR_DEBUG=1
-
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
 [ -e test/ ] && exit 1
 mkdir test/ || exit $?
 
-#This file tests inlining of symlinks inside the repo.
+GIT=/usr/bin/git
+git()
+{
+  $GIT "$@"
+}
+case $(uname -s) in
+  Darwin*)
+    #why must you claim to be unix-like, yet be so different
+    GITBSLR=$(pwd)/gitbslr.dylib
+    gitbslr()
+    {
+      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+    }
+  ;;
+  *)
+    GITBSLR=$(pwd)/gitbslr.so
+    gitbslr()
+    {
+      LD_PRELOAD=$GITBSLR $GIT "$@"
+    }
+  ;;
+esac
+export GITBSLR_DEBUG=1
+
+#This script tests inlining of symlinks inside the repo (i.e. GITBSLR_FOLLOW).
 
 
 #input:
@@ -85,15 +105,15 @@ echo file4 >                              test/expected/to_sub4/to_sub5/file4
 
 
 cd test/input/
-$GIT init
-LD_PRELOAD=../../gitbslr.so $GIT add . || exit $?
-$GIT commit -m 'GitBSLR test' || exit $?
+git init
+gitbslr add . || exit $?
+git commit -m 'GitBSLR test' || exit $?
 cd ../../
 
 mkdir test/output/
 mv test/input/.git test/output/.git
 cd test/output/
-$GIT reset --hard HEAD
+git reset --hard HEAD
 cd ../../
 
 cd test/output/

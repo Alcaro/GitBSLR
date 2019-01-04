@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
+EXT := .so
+ifeq ($(shell uname -s),Darwin)
+  EXT := .dylib
+endif
+
 OPT ?= 0
 ifeq ($(OPT),0)
   DEBUG ?= 1
@@ -13,7 +18,11 @@ CXXFLAGS = $(CFLAGS)
 
 TRUE_FLAGS := -std=c++98 -fno-rtti -fvisibility=hidden
 TRUE_FLAGS += -fvisibility=hidden -Wall -Wmissing-declarations -pipe -fno-exceptions
-TRUE_FLAGS += -fPIC -ldl -Wl,-z,relro,-z,now,--no-undefined -shared
+ifneq ($(shell uname -s),Darwin)
+  TRUE_FLAGS += -fPIC -ldl -Wl,-z,relro,-z,now,--no-undefined -shared
+else
+  TRUE_FLAGS += -dynamiclib -undefined suppress
+endif
 
 ifneq ($(OPT),0)
   TRUE_FLAGS += -Os -fomit-frame-pointer -fmerge-all-constants -fvisibility=hidden
@@ -29,11 +38,11 @@ endif
 
 TRUE_FLAGS += $(CXXFLAGS) $(LFLAGS)
 
-gitbslr.so: main.cpp
+gitbslr$(EXT): main.cpp
 	$(CXX) $+ $(TRUE_FLAGS) -o $@ -lm
 
 clean:
-	rm gitbslr.so
+	rm gitbslr$(EXT)
 
 install:
 	./install.sh

@@ -5,15 +5,35 @@
 #dash doesn't support pipefail
 set -eu
 
-#must NOT contain GitBSLR
-GIT=/usr/bin/git
-export GITBSLR_DEBUG=1
-
 cd $(dirname $0)
 make || exit $?
 rm -rf test/ || exit $?
 [ -e test/ ] && exit 1
 mkdir test/ || exit $?
+
+GIT=/usr/bin/git
+git()
+{
+  $GIT "$@"
+}
+case $(uname -s) in
+  Darwin*)
+    #why must you claim to be unix-like, yet be so different
+    GITBSLR=$(pwd)/gitbslr.dylib
+    gitbslr()
+    {
+      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+    }
+  ;;
+  *)
+    GITBSLR=$(pwd)/gitbslr.so
+    gitbslr()
+    {
+      LD_PRELOAD=$GITBSLR $GIT "$@"
+    }
+  ;;
+esac
+export GITBSLR_DEBUG=1
 
 
 #input:
@@ -69,22 +89,22 @@ ln -sr test/expected/subdir1     test/expected/to_subdir1
 
 
 cd test/input/wrap/the_repo/
-LD_PRELOAD=../../../../gitbslr.so $GIT init
+gitbslr init
 grep -q 'symlinks = false' .git/config && echo Error: No symlink support
 grep -q 'symlinks = false' .git/config && exit 1
-#strace -E LD_PRELOAD=../../../gitbslr.so $GIT add . 2>&1 | tee ../../../e.log
-#strace $GIT add . 2>&1 | tee ../../../e.log
-LD_PRELOAD=../../../../gitbslr.so $GIT add . || exit $?
+gitbslr add . || exit $?
 #this could simply be
-#$GIT commit -m "GitBSLR test" || exit $?
+#git commit -m "GitBSLR test" || exit $?
 #but I want this to ensure https://github.com/Alcaro/GitBSLR/issues/1 doesn't regress
-LD_PRELOAD=../../../../gitbslr.so EDITOR=../../../../test-dummyeditor.py $GIT commit || exit $?
+export EDITOR=../../../../test-dummyeditor.py
+gitbslr commit || exit $?
 cd ../../../../
 
 mkdir test/output/
 mv test/input/wrap/the_repo/.git test/output/.git
 cd test/output/
-$GIT reset --hard HEAD
+#not gitbslr here, we want to extract what Git actually saw
+git reset --hard HEAD
 cd ../../
 
 cd test/output/
