@@ -50,7 +50,7 @@ mv ../evilrepo_v1/.git ./.git
 LD_PRELOAD=../../gitbslr.so $GIT reset --hard
 mv .git ../evilrepo_v1/.git
 mv ../evilrepo_v2/.git ./.git
-LD_PRELOAD=../../gitbslr.so $GIT reset --hard
+LD_PRELOAD=../../gitbslr.so $GIT reset --hard || true # supposed to fail, shouldn't hit -e
 mv .git ../evilrepo_v2/.git
 
 cd ../../
