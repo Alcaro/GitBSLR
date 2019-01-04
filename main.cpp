@@ -14,6 +14,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#if defined(__linux__)
+ //nothing
+#else
+# warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
+#endif
+
 class anyptr {
 	void* data;
 public:
@@ -21,6 +27,14 @@ public:
 	template<typename T> operator T*() { return (T*)data; }
 	template<typename T> operator const T*() const { return (const T*)data; }
 };
+
+#ifndef __GLIBC__
+static const char * strchrnul(const char * s, int c)
+{
+	const char * ret = strchr(s, c);
+	return ret ? ret : s+strlen(s);
+}
+#endif
 
 template<typename T> static T min(const T& a, const T& b) { return a < b ? a : b; }
 
@@ -151,12 +165,16 @@ public:
 
 
 typedef int (*chdir_t)(const char * path);
+typedef int (*lstat_t)(const char * path, struct stat* buf);
+typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
 typedef struct dirent64* (*readdir64_t)(DIR* dirp);
-typedef int (*symlink_t)(const char *target, const char *linkpath);
+typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static chdir_t chdir_o;
+static lstat_t lstat_o;
+static __lxstat64_t __lxstat64_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
 static readdir64_t readdir64_o;
@@ -335,6 +353,8 @@ static bool debug = false;
 __attribute__((constructor)) static void init()
 {
 	chdir_o = (chdir_t)dlsym(RTLD_NEXT, "chdir");
+	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
+	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
@@ -346,7 +366,7 @@ __attribute__((constructor)) static void init()
 	if (getenv("GITBSLR_DEBUG"))
 	{
 		debug = true;
-		fprintf(stderr, "GitBSLR: loaded\n");
+		fprintf(stderr, "GitBSLR: Loaded\n");
 	}
 }
 
@@ -363,8 +383,11 @@ DLLEXPORT int chdir(const char * path)
 
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
+	if (!initialized || strstr(path, "/.git/")) // for git init
+		return lstat_o(path, buf);
+	
 	int ret = stat(path, buf);
-	if (!initialized || ret<0) return ret;
+	if (ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
@@ -380,8 +403,15 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
+	// http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html says version must be 3, but my Git uses 1
+	// most likely struct stat64 changing - I don't really care what that struct is, I care only about which path to (l)stat,
+	// so I can safely ignore the version
+	
+	if (!initialized || strstr(path, "/.git/")) // for git init
+		return __lxstat64_o(ver, path, buf);
+	
 	int ret = __xstat64(ver, path, buf);
-	if (!initialized || ret<0) return ret;
+	if (ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
@@ -399,7 +429,7 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 	if (!initialized) return readlink_o(path, buf, bufsiz);
 	
 	string newpath = resolve_symlink(path);
-	if (debug) fprintf(stderr, "GitBSLR: readlink(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
+	if (debug) fprintf(stderr, "GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
 	if (!newpath)
 	{
 		errno = EINVAL;

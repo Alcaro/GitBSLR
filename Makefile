@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
+ifeq ($(shell uname -s),Darwin)
+  $(error This program does not function on OSX. See readme for details.)
+endif
+
 OPT ?= 0
 ifeq ($(OPT),0)
   DEBUG ?= 1
@@ -19,8 +23,7 @@ ifneq ($(OPT),0)
   TRUE_FLAGS += -Os -fomit-frame-pointer -fmerge-all-constants -fvisibility=hidden
   TRUE_FLAGS += -fno-unwind-tables -fno-asynchronous-unwind-tables
   TRUE_FLAGS += -ffunction-sections -fdata-sections
-  TRUE_FLAGS += -fno-ident
-  TRUE_FLAGS += -Werror -DNDEBUG
+  TRUE_FLAGS += -fno-ident -DNDEBUG
   TRUE_FLAGS += -Wl,--gc-sections,--build-id=none,--hash-style=gnu,--relax
   ifneq ($(DEBUG),1)
     TRUE_FLAGS += -s
@@ -40,3 +43,10 @@ install:
 	./install.sh
 uninstall:
 	./install.sh uninstall
+
+test: gitbslr.so
+	sh test.sh | tee /dev/stderr | grep -q 'Test passed'
+	sh test2.sh | tee /dev/stderr | grep -q 'Test passed'
+	sh test3.sh | tee /dev/stderr | grep -q 'Test passed'
+	echo All tests passed
+.PHONY: test
