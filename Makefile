@@ -2,7 +2,7 @@
 # GitBSLR is available under the same license as Git itself.
 
 ifeq ($(shell uname -s),Darwin)
-  $(error This program does not function on OSX. See readme for details.)
+  $(error This program does not function on OSX. I couldn't find a functional LD_PRELOAD equivalent.)
 endif
 
 OPT ?= 0

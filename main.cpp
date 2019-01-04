@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #if defined(__linux__)
- //nothing
+# define HAVE_DIRENT64
 #else
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
 #endif
@@ -166,19 +166,22 @@ public:
 
 typedef int (*chdir_t)(const char * path);
 typedef int (*lstat_t)(const char * path, struct stat* buf);
-typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
-typedef struct dirent64* (*readdir64_t)(DIR* dirp);
 typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static chdir_t chdir_o;
 static lstat_t lstat_o;
-static __lxstat64_t __lxstat64_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
-static readdir64_t readdir64_o;
 static symlink_t symlink_o;
+
+#ifdef HAVE_DIRENT64
+typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
+typedef struct dirent64* (*readdir64_t)(DIR* dirp);
+static __lxstat64_t __lxstat64_o;
+static readdir64_t readdir64_o;
+#endif
 
 
 static string readlink_d(const string& path)
@@ -354,11 +357,13 @@ __attribute__((constructor)) static void init()
 {
 	chdir_o = (chdir_t)dlsym(RTLD_NEXT, "chdir");
 	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
-	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
+#ifdef HAVE_DIRENT64
+	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
+	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
+#endif
 	
 	//GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
@@ -401,6 +406,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return ret;
 }
 
+#ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 	// http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html says version must be 3, but my Git uses 1
@@ -423,6 +429,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	}
 	return ret;
 }
+#endif
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
@@ -500,9 +507,11 @@ DLLEXPORT struct dirent* readdir(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
+#ifdef HAVE_DIRENT64
 DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 {
 	dirent64* r = readdir64_o(dirp);
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
+#endif

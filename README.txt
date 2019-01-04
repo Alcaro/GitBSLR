@@ -17,11 +17,10 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
     may make 'git pull' annoying.
 - Interaction with Git's cross-filesystem detector is untested.
 - Interaction with submodules, --git-dir, and other rare features, is untested.
-- Linux only. Windows and OSX do, to my knowledge, not have any functional LD_PRELOAD mechanism, so
-    I can't support them; if you can find anything I couldn't, you're welcome to submit a PR. Less
-    common systems, such as FreeBSD, WSL or Cygwin, may or may not work; this isn't tested. If you
-    want to help, feel free to check the osx branch; if you find a LD_PRELOAD equivalent on OSX, or
-    want to try a x, most Linuxisms are purged from there.
+- Only Linux is supported. Windows and OSX do, to my knowledge, not have any functional LD_PRELOAD
+    mechanism, so I can't support them; if you can find anything I couldn't, you're welcome to
+    submit a PR. Less common systems, such as FreeBSD, WSL or Cygwin, may or may not work; this
+    isn't tested.
 - For security reasons, GitBSLR prevents Git from creating symlinks to outside the repo. See
     test2.sh for details.
 
