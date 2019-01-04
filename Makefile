@@ -19,8 +19,7 @@ ifneq ($(OPT),0)
   TRUE_FLAGS += -Os -fomit-frame-pointer -fmerge-all-constants -fvisibility=hidden
   TRUE_FLAGS += -fno-unwind-tables -fno-asynchronous-unwind-tables
   TRUE_FLAGS += -ffunction-sections -fdata-sections
-  TRUE_FLAGS += -fno-ident
-  TRUE_FLAGS += -Werror -DNDEBUG
+  TRUE_FLAGS += -fno-ident -DNDEBUG
   TRUE_FLAGS += -Wl,--gc-sections,--build-id=none,--hash-style=gnu,--relax
   ifneq ($(DEBUG),1)
     TRUE_FLAGS += -s

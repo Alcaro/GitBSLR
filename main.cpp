@@ -14,6 +14,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#if defined(__linux__)
+# define HAVE_DIRENT64
+#else
+# warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
+#endif
+
 class anyptr {
 	void* data;
 public:
@@ -21,6 +27,14 @@ public:
 	template<typename T> operator T*() { return (T*)data; }
 	template<typename T> operator const T*() const { return (const T*)data; }
 };
+
+#ifndef __GLIBC__
+static const char * strchrnul(const char * s, int c)
+{
+	const char * ret = strchr(s, c);
+	return ret ? ret : s+strlen(s);
+}
+#endif
 
 template<typename T> static T min(const T& a, const T& b) { return a < b ? a : b; }
 
@@ -378,6 +392,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return ret;
 }
 
+#ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 	int ret = __xstat64(ver, path, buf);
@@ -393,6 +408,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	}
 	return ret;
 }
+#endif
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
@@ -470,9 +486,11 @@ DLLEXPORT struct dirent* readdir(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
+#ifdef HAVE_DIRENT64
 DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 {
 	dirent64* r = readdir64_o(dirp);
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
+#endif
