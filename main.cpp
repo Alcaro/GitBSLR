@@ -383,11 +383,11 @@ DLLEXPORT int chdir(const char * path)
 
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
-	if (strstr(path, "/.git/")) // for git init
+	if (!initialized || strstr(path, "/.git/")) // for git init
 		return lstat_o(path, buf);
 	
 	int ret = stat(path, buf);
-	if (!initialized || ret<0) return ret;
+	if (ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
@@ -404,14 +404,15 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 #ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
-	// http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html says version must be 3, but Git uses 1
-	// most likely struct stat64 changing - I don't really care what that struct is, I care only about which path to (l)stat
+	// http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html says version must be 3, but my Git uses 1
+	// most likely struct stat64 changing - I don't really care what that struct is, I care only about which path to (l)stat,
+	// so I can safely ignore the version
 	
-	if (strstr(path, "/.git/")) // for git init
+	if (!initialized || strstr(path, "/.git/")) // for git init
 		return __lxstat64_o(ver, path, buf);
 	
 	int ret = __xstat64(ver, path, buf);
-	if (!initialized || ret<0) return ret;
+	if (ret<0) return ret;
 	
 	string newpath = resolve_symlink(path);
 	if (debug) fprintf(stderr, "GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());

@@ -104,7 +104,7 @@ gitbslr add . || exit $?
 #this could simply be
 #git commit -m "GitBSLR test" || exit $?
 #but I want this to ensure https://github.com/Alcaro/GitBSLR/issues/1 doesn't regress
-export EDITOR=../../../../test-dummyeditor.py
+export EDITOR=../../../../test-dummyeditor.pl
 gitbslr commit || exit $?
 cd ../../../../
 
