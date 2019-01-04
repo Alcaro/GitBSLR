@@ -22,7 +22,7 @@ case $(uname -s) in
     GITBSLR=$(pwd)/gitbslr.dylib
     gitbslr()
     {
-      DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
+      DYLD_FORCE_FLAT_NAMESPACE=1 DYLD_INSERT_LIBRARIES=$GITBSLR $GIT "$@"
     }
   ;;
   *)

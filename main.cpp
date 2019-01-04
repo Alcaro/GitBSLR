@@ -366,7 +366,7 @@ __attribute__((constructor)) static void init()
 	if (getenv("GITBSLR_DEBUG"))
 	{
 		debug = true;
-		fprintf(stderr, "GitBSLR: loaded\n");
+		fprintf(stderr, "GitBSLR: Loaded\n");
 	}
 }
 
