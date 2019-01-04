@@ -49,7 +49,7 @@ install:
 uninstall:
 	./install.sh uninstall
 
-test: gitbslr.so
+test: gitbslr$(EXT)
 	sh test.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test2.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test3.sh | tee /dev/stderr | grep -q 'Test passed'
