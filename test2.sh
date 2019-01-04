@@ -35,6 +35,14 @@ case $(uname -s) in
 esac
 export GITBSLR_DEBUG=1
 
+ln_sr()
+{
+  #Perl is slow, but anything else I could find requires Bash, or other programs less guaranteed to exist
+  ln -sr $1 $2 || perl -e'use File::Spec; use File::Basename;
+                          symlink File::Spec->abs2rel($ARGV[0], dirname($ARGV[1])), $ARGV[1] or
+                              die qq{cannot create symlink: $!$/}' $1 $2
+}
+
 #With GitBSLR installed, Git can end up writing to outside the repository directory. If a pulled
 # repository is malicious, this can cause remote code execution, for example by scribbling across your .bashrc.
 #GitBSLR must prevent that. Since the entire point of GitBSLR is writing outside the repo, something
