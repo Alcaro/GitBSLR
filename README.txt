@@ -1,3 +1,6 @@
+>>> This is a broken and abandoned branch; it is not suitable for general use <<<
+>>> If you're good with OSX and willing to help, please do; if not, use the master branch <<<
+
 GitBSLR - make Git follow symlinks
 
 Making Git follow symlinks is a fairly common request
