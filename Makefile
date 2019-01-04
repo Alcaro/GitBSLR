@@ -21,7 +21,7 @@ TRUE_FLAGS += -fvisibility=hidden -Wall -Wmissing-declarations -pipe -fno-except
 ifneq ($(shell uname -s),Darwin)
   TRUE_FLAGS += -fPIC -ldl -Wl,-z,relro,-z,now,--no-undefined -shared
 else
-  TRUE_FLAGS += -dynamiclib -undefined suppress
+  TRUE_FLAGS += -dynamiclib
 endif
 
 ifneq ($(OPT),0)
