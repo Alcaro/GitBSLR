@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // GitBSLR is available under the same license as Git itself. If Git relicenses, you may choose
-//    whether to use GitBSLR under GPL2 or Git's new license.
+//    whether to use GitBSLR under GPLv2 or Git's new license.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +19,8 @@
 #else
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
 #endif
+
+#define DEBUG_PRINTF(...) do { if (debug) fprintf(stderr, __VA_ARGS__); } while(0)
 
 class anyptr {
 	void* data;
@@ -380,7 +382,7 @@ __attribute__((constructor)) static void init()
 //.. and .git are never symlinks and should never be, so before chdir is called, let's not override anything
 DLLEXPORT int chdir(const char * path)
 {
-	if (debug) fprintf(stderr, "GitBSLR: chdir(%s)\n", path);
+	DEBUG_PRINTF("GitBSLR: chdir(%s)\n", path);
 	
 	initialized = true;
 	return chdir_o(path);
@@ -389,13 +391,22 @@ DLLEXPORT int chdir(const char * path)
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
 	if (!initialized || strstr(path, "/.git/")) // for git init
+	{
+		DEBUG_PRINTF("GitBSLR: lstat(%s) - untouched because in .git, or .git not yet located\n", path);
 		return lstat_o(path, buf);
+	}
 	
 	int ret = stat(path, buf);
-	if (ret<0) return ret;
+	if (ret < 0)
+	{
+		int errno_tmp = errno;
+		DEBUG_PRINTF("GitBSLR: lstat(%s) - untouched because %s\n", path, strerror(errno_tmp));
+		errno = errno_tmp;
+		return ret;
+	}
 	
 	string newpath = resolve_symlink(path);
-	if (debug) fprintf(stderr, "GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
+	DEBUG_PRINTF("GitBSLR: lstat(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
 	{
 		buf->st_mode &= ~S_IFMT;
@@ -414,13 +425,22 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	// so I can safely ignore the version
 	
 	if (!initialized || strstr(path, "/.git/")) // for git init
+	{
+		DEBUG_PRINTF("GitBSLR: __lxstat64(%s) - untouched\n", path);
 		return __lxstat64_o(ver, path, buf);
+	}
 	
 	int ret = __xstat64(ver, path, buf);
-	if (ret<0) return ret;
+	if (ret < 0)
+	{
+		int errno_tmp = errno;
+		DEBUG_PRINTF("GitBSLR: __lxstat64(%s) - untouched because %s\n", path, strerror(errno_tmp));
+		errno = errno_tmp;
+		return ret;
+	}
 	
 	string newpath = resolve_symlink(path);
-	if (debug) fprintf(stderr, "GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
+	DEBUG_PRINTF("GitBSLR: __lxstat64(%s)%s%s\n", path, newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
 	{
 		buf->st_mode &= ~S_IFMT;
@@ -433,10 +453,14 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
-	if (!initialized) return readlink_o(path, buf, bufsiz);
+	if (!initialized)
+	{
+		DEBUG_PRINTF("GitBSLR: readlink(%s) - untouched\n", path);
+		return readlink_o(path, buf, bufsiz);
+	}
 	
 	string newpath = resolve_symlink(path);
-	if (debug) fprintf(stderr, "GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
+	DEBUG_PRINTF("GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
 	if (!newpath)
 	{
 		errno = EINVAL;
@@ -450,7 +474,7 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
-	if (debug) fprintf(stderr, "GitBSLR: symlink(%s <- %s)\n", target, linkpath);
+	DEBUG_PRINTF("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
 	
 	if (strstr(linkpath, "/.git/"))
 	{
