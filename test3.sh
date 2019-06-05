@@ -2,47 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # GitBSLR is available under the same license as Git itself.
 
-#dash doesn't support pipefail
-set -eu
-
 cd $(dirname $0)
-make || exit $?
-rm -rf test/ || exit $?
-[ -e test/ ] && exit 1
-mkdir test/ || exit $?
+. ./testlib.sh
 
-GIT=/usr/bin/git
-git()
-{
-  $GIT "$@"
-}
-GITBSLR=$(pwd)/gitbslr.so
-gitbslr()
-{
-  LD_PRELOAD=$GITBSLR $GIT "$@"
-}
-export GITBSLR_DEBUG=1
-
-ln_sr()
-{
-  #Perl is no beauty, but anything else I could find requires Bash, or other programs not guaranteed to exist
-  ln -sr $1 $2 || perl -e'use File::Spec; use File::Basename;
-                          symlink File::Spec->abs2rel($ARGV[0], dirname($ARGV[1])), $ARGV[1] or
-                              die qq{cannot create symlink: $!$/}' $1 $2
-}
-
-tree()
-{
-  perl -e '
-    use File::Find qw(finddepth);
-    my @files;
-    finddepth(sub {
-      print $File::Find::name, " -> ", readlink($File::Find::name), "\n";
-    }, $ARGV[0]);
-    ' $1 | sed s%$1%% | grep -v .git | LC_ALL=C sort
-}
-
-#This script tests inlining of symlinks inside the repo (i.e. GITBSLR_FOLLOW).
+#This script tests inlining of symlinks inside the repo, via GITBSLR_FOLLOW.
 
 
 #input:
@@ -113,8 +76,8 @@ echo file4 >                             test/expected/to_sub4/to_sub5/file4
 
 cd test/input/
 git init
-gitbslr add . || exit $?
-git commit -m 'GitBSLR test' || exit $?
+gitbslr add .
+git commit -m 'GitBSLR test'
 cd ../../
 
 mkdir test/output/
@@ -123,6 +86,8 @@ cd test/output/
 git reset --hard HEAD
 cd ../../
 
-tree test/output > test/output.log
-tree test/expected > test/expected.log
-diff -U999 test/output.log test/expected.log && echo Test passed; exit $?
+tree test/output/ > test/output.log
+tree test/expected/ > test/expected.log
+diff -U999 test/output.log test/expected.log
+
+echo Test passed

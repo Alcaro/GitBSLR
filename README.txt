@@ -15,19 +15,19 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
     the loop point becomes a symlink, overriding GITBSLR_FOLLOW.
 - If a file is accessible via multiple paths, you may end up with duplicate files in the repo. This
     may make 'git pull' annoying.
+
+Things that don't work, or aren't tested:
+- If someone checked in a symlink to outside the repo, things won't work. See test2.sh for details.
 - Interaction with rare Git features, like submodules or the cross-filesystem detector, is untested.
-- You may not use --work-tree, or any equivalent; it's a security hole. Since GitBSLR does not have
-    access to Git's internals, I am unable to fix - or even detect - this situation.
-- Only Linux is known to work. Windows and OSX don't work; as far as I know, they don't have any
-    usable LD_PRELOAD equivalent, so there's nothing I can do. (If you know anything I don't, please
-    submit a PR.) Less common systems, such as FreeBSD, WSL or Cygwin, are untested, and may or may
-    not work; feel free to try.
-- For security reasons, GitBSLR prevents Git from creating symlinks to outside the repo. See
-    test2.sh for details.
+- Anything complex (links to links, links within links, broken links, etc) may yield weird results.
+- GitBSLR does not work natively on Windows or OSX. (It may work in WSL and Cygwin - not tested.)
+- GitBSLR is only tested on Linux, though I'd expect it to work on most other Unix-likes.
+- GitBSLR is only tested with glibc, though I'd expect it to work on most libcs.
+- --work-tree, --git-dir and similar don't work. Use GITBSLR_GIT_DIR and GITBSLR_WORK_TREE instead.
 
 To enable GitBSLR on your machine:
 (1) Install your favorite Linux flavor (or other Unix-like environment, if you're feeling lucky)
-(2) Install make and a C++11 compiler; only tested with GNU make and g++, but others will probably
+(2) Install make and a C++ compiler; only tested with GNU make and g++, but others will probably
       work (if not, report the bug)
 (3) Compile GitBSLR with 'make', or 'make OPT=1' to enable my recommended optimizations, or 'make
       CFLAGS=-O3 LFLAGS=-s' if you want your own flags
@@ -57,6 +57,29 @@ Configuration: GitBSLR obeys a few environment variables, which can be set per-i
     To avoid infinite loops, symlinks that (after inlining) point to one of their in-repo parent
       directories will remain as symlinks. Additionally, if there are symlinks to one of the repo's
       parent directories, the repo root will be treated as a symlink.
+- GITBSLR_GIT_DIR
+    By default, GitBSLR assumes the Git directory is the first existing accessed path containing a
+      .git component. If yours is elsewhere, you can override this default.
+    Note that GitBSLR does not use the GIT_DIR variable. This is since there are three ways to set
+      this path: GIT_DIR=, --git-dir=, and defaulting to the closest .git in the working directory.
+      For architectural reasons, GitBSLR cannot access the command line arguments, and having two of
+      three ways functional would be misleading. Better obviously dumb than giving people bad
+      expectations.
+    If this is set, GitBSLR will set GIT_DIR for you. However, --git-dir overrides GIT_DIR, so don't
+      use that.
+    WARNING: Setting this variable incorrectly, or not setting it if it should be set, is very
+      likely to yield security holes or other trouble.
+- GITBSLR_WORK_TREE
+    By default, GitBSLR assumes the work tree is the parent of the Git directory. If yours is
+      elsewhere, you can override this default.
+    Note that GitBSLR does not use the GIT_WORK_TREE variable. This is since there are four ways to
+      set this path: GIT_DIR=, --git-dir=, .git/config, and defaulting to GIT_DIR's parent. Like
+      GIT_DIR, some of those are unavailable to GitBSLR; better obviously dumb than almost smart
+      enough.
+    If this is set, GitBSLR will set GIT_WORK_TREE for you. However, --work-tree overrides
+      GIT_WORK_TREE, so don't use that.
+    WARNING: Setting this variable incorrectly, or not setting it if it should be set, is very
+      likely to yield security holes or other trouble.
 
 GitBSLR will not automatically deduplicate anything, or otherwise create any symlinks for Git to
   follow. You have to create the symlinks yourself.
