@@ -51,5 +51,6 @@ test: gitbslr.so
 	sh test4.sh | tee /dev/stderr | grep -q 'Test passed'
 	rm -rf test/
 	echo All tests passed
+check: test
 
-.PHONY: test clean install uninstall
+.PHONY: clean install uninstall test check

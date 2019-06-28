@@ -541,7 +541,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
-		DEBUG("GitBSLR: lstat(%s) - untouched because in .git, or .git not yet located\n", path);
+		DEBUG("GitBSLR: lstat(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
 		int ret = lstat_o(path, buf);
 		int errno_tmp = errno;
 		if (ret >= 0) gitpath.try_init(path);
@@ -581,7 +581,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
-		DEBUG("GitBSLR: __lxstat64(%s) - untouched because in .git, or .git not yet located\n", path);
+		DEBUG("GitBSLR: __lxstat64(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
 		int ret = __lxstat64_o(ver, path, buf);
 		int errno_tmp = errno;
 		if (ret >= 0) gitpath.try_init(path);
@@ -613,12 +613,13 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
-	if (!gitpath.initialized())
+	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
-		DEBUG("GitBSLR: readlink(%s) - untouched because .git not yet located\n", path);
+		DEBUG("GitBSLR: readlink(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
 		return readlink_o(path, buf, bufsiz);
 	}
 	
+	DEBUG("GitBSLR: readlink(%s)\n", path);
 	string newpath = gitpath.resolve_symlink(path);
 	DEBUG("GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
 	if (!newpath)

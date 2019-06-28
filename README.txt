@@ -19,7 +19,7 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed:
 Things that don't work, or aren't tested:
 - If someone checked in a symlink to outside the repo, things won't work. See test2.sh for details.
 - Interaction with rare Git features, like submodules or the cross-filesystem detector, is untested.
-- Anything complex (links to links, links within links, broken links, etc) may yield weird results.
+- Anything complex (links to links, links within links, dangling links, etc) may yield weird results.
 - GitBSLR does not work natively on Windows or OSX. (It may work in WSL and Cygwin - not tested.)
 - GitBSLR is only tested on Linux, though I'd expect it to work on most other Unix-likes.
 - GitBSLR is only tested with glibc, though I'd expect it to work on most libcs.
