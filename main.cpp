@@ -347,19 +347,7 @@ public:
 		if (git_dir && path+"/" == git_dir)
 			return cls_git_dir;
 		if (work_tree && path.startswith(work_tree))
-		{
-			if (path.contains("/.git/"))
-			{
-				if (fatal_unknown)
-				{
-					FATAL("GitBSLR: attempted access to unexpected .git directory %s. "
-					      "Nested git repos are untested and may be security issues.\n",
-					      path.c_str(), work_tree.c_str(), git_dir.c_str());
-				}
-				return cls_unknown;
-			}
 			return cls_work_tree;
-		}
 		if (work_tree && path+"/" == work_tree)
 			return cls_work_tree;
 		if (fatal_unknown)
@@ -555,6 +543,7 @@ __attribute__((constructor)) static void init()
 
 DLLEXPORT int lstat(const char * path, struct stat* buf)
 {
+	DEBUG("GitBSLR: lstat(%s)\n", path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
 		DEBUG("GitBSLR: lstat(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
@@ -574,7 +563,6 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 		return ret;
 	}
 	
-	DEBUG("GitBSLR: lstat(%s)", path);
 	string newpath = gitpath.resolve_symlink(path);
 	DEBUG("%s%s\n", newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
@@ -595,6 +583,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	// probably struct stat64 changing - I don't really care about that struct, I care only about which path to (l)stat,
 	// so I'll ignore the version
 	
+	DEBUG("GitBSLR: __lxstat64(%s)\n", path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
 		DEBUG("GitBSLR: __lxstat64(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
@@ -614,7 +603,6 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 		return ret;
 	}
 	
-	DEBUG("GitBSLR: __lxstat64(%s)", path);
 	string newpath = gitpath.resolve_symlink(path);
 	DEBUG("%s%s\n", newpath ? " -> " : "", newpath.c_str());
 	if (newpath)
@@ -629,13 +617,13 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
+	DEBUG("GitBSLR: readlink(%s)\n", path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
 		DEBUG("GitBSLR: readlink(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
 		return readlink_o(path, buf, bufsiz);
 	}
 	
-	DEBUG("GitBSLR: readlink(%s)\n", path);
 	string newpath = gitpath.resolve_symlink(path);
 	DEBUG("GitBSLR: readlink(%s) -> %s\n", path, newpath ? newpath.c_str() : "(not link)");
 	if (!newpath)
@@ -653,6 +641,8 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
 	//TODO: rewrite this function, use more gitpath
 	//needs more robust tests first
+	//also make sure to reject targets containing /.git/,
+	// even if that's a .git other than current work tree - can't have repos corrupt each other
 	DEBUG("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
 	
 	if (strstr(linkpath, "/.git/"))
