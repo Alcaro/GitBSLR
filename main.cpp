@@ -20,6 +20,10 @@
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
 #endif
 
+// TODO: add a test for git clone
+// I don't want it to touch the network, but clones from local directories fail becaue unexpected access to <source repo location>
+// not sure if that's fixable without creating a GITBSLR_THIRD_DIR env, and I don't know if I want to do that (needs a better name first)
+
 #undef DEBUG
 #define DEBUG(...) do { if (debug) fprintf(stderr, __VA_ARGS__); } while(0)
 #define FATAL(...) do { fprintf(stderr, __VA_ARGS__); exit(1); } while(0)
@@ -338,13 +342,25 @@ public:
 		
 		if (path.startswith("/usr/share/git-core/"))
 			return cls_git_dir;
-		if (path.startswith(git_dir))
+		if (git_dir && path.startswith(git_dir))
 			return cls_git_dir;
-		if (path+"/" == git_dir)
+		if (git_dir && path+"/" == git_dir)
 			return cls_git_dir;
-		if (path.startswith(work_tree))
+		if (work_tree && path.startswith(work_tree))
+		{
+			if (path.contains("/.git/"))
+			{
+				if (fatal_unknown)
+				{
+					FATAL("GitBSLR: attempted access to unexpected .git directory %s. "
+					      "Nested git repos are untested and may be security issues.\n",
+					      path.c_str(), work_tree.c_str(), git_dir.c_str());
+				}
+				return cls_unknown;
+			}
 			return cls_work_tree;
-		if (path+"/" == work_tree)
+		}
+		if (work_tree && path+"/" == work_tree)
 			return cls_work_tree;
 		if (fatal_unknown)
 		{
@@ -574,7 +590,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 #ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
-	// according to http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html ,
+	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
 	// the version should be 3, but my Git uses 1
 	// probably struct stat64 changing - I don't really care about that struct, I care only about which path to (l)stat,
 	// so I'll ignore the version
@@ -635,6 +651,8 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
+	//TODO: rewrite this function, use more gitpath
+	//needs more robust tests first
 	DEBUG("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
 	
 	if (strstr(linkpath, "/.git/"))
