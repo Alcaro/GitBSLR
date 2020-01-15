@@ -209,16 +209,19 @@ public:
 
 
 typedef int (*lstat_t)(const char * path, struct stat* buf);
-typedef int (*__lxstat_t)(int ver, const char * path, struct stat* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
 typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static lstat_t lstat_o;
-static __lxstat_t __lxstat_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
 static symlink_t symlink_o;
+
+#ifdef _STAT_VER
+typedef int (*__lxstat_t)(int ver, const char * path, struct stat* buf);
+static __lxstat_t __lxstat_o;
+#endif
 
 #ifdef HAVE_DIRENT64
 typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
@@ -234,6 +237,9 @@ inline void ensure_type_correctness()
 	(void)(readlink_o == readlink);
 	(void)(readdir_o == readdir);
 	(void)(symlink_o == symlink);
+#ifdef _STAT_VER
+	(void)(__lxstat == __lxstat_o);
+#endif
 #ifdef HAVE_DIRENT64
 	(void)(__lxstat64 == __lxstat64_o);
 	(void)(readdir64 == readdir64_o);
@@ -509,16 +515,28 @@ static path_handler gitpath;
 
 
 
-static int lstat_lxstat_wrap(const char * path, struct stat * buf) { return __lxstat_o(_STAT_VER, path, buf); }
+#ifdef _STAT_VER
+static int lstat_lxstat_wrap(const char * path, struct stat * buf)
+{
+	return __lxstat_o(_STAT_VER, path, buf);
+}
+#endif
 __attribute__((constructor)) static void init()
 {
+	if (getenv("GITBSLR_DEBUG"))
+	{
+		debug = true;
+		DEBUG("GitBSLR: Loaded\n");
+	}
+	
 	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-	if (!lstat_o) lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat64");
+#ifdef _STAT_VER
 	if (!lstat_o)
 	{
 		__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
 		if (__lxstat_o) lstat_o = lstat_lxstat_wrap;
 	}
+#endif
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
@@ -536,12 +554,6 @@ __attribute__((constructor)) static void init()
 	
 	//GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
-	
-	if (getenv("GITBSLR_DEBUG"))
-	{
-		debug = true;
-		DEBUG("GitBSLR: Loaded\n");
-	}
 	
 	const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
 	if (gitbslr_git_dir)
@@ -565,24 +577,45 @@ __attribute__((constructor)) static void init()
 }
 
 
-DLLEXPORT int lstat(const char * path, struct stat* buf)
+
+static int stat_3264(const char * path, struct stat* buf)
 {
-	DEBUG("GitBSLR: lstat(%s)\n", path);
+	return stat(path, buf);
+}
+static int lstat_o_3264(const char * path, struct stat* buf)
+{
+	return lstat_o(path, buf);
+}
+#ifdef HAVE_DIRENT64
+static int stat_3264(const char * path, struct stat64* buf)
+{
+	return __xstat64(_STAT_VER, path, buf);
+}
+static int lstat_o_3264(const char * path, struct stat64* buf)
+{
+	return __lxstat64_o(_STAT_VER, path, buf);
+}
+#endif
+
+template<typename stat_t>
+int inner_lstat(const char * fn_name, const char * path, stat_t* buf)
+{
+	DEBUG("GitBSLR: %s(%s)\n", fn_name, path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
-		DEBUG("GitBSLR: lstat(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
-		int ret = lstat_o(path, buf);
+		DEBUG("GitBSLR: %s(%s) - untouched because %s\n", fn_name, path, gitpath.initialized() ? "in .git" : ".git not yet located");
+		int ret = lstat_o_3264(path, buf);
 		int errno_tmp = errno;
 		if (ret >= 0) gitpath.try_init(path);
 		errno = errno_tmp;
 		return ret;
 	}
 	
-	int ret = stat(path, buf);
+	int ret = stat_3264(path, buf);
 	if (ret < 0)
 	{
-		DEBUG("GitBSLR: lstat(%s) - untouched because can't stat (%s)\n", path, strerror(errno));
-		return lstat_o(path, buf);
+		DEBUG("GitBSLR: %s(%s) - untouched because can't stat (%s)\n", fn_name, path, strerror(errno));
+		return lstat_o_3264(path, buf);
 	}
 	
 	string newpath = gitpath.resolve_symlink(path);
@@ -597,41 +630,34 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return ret;
 }
 
+DLLEXPORT int lstat(const char * path, struct stat* buf)
+{
+	return inner_lstat("lstat", path, buf);
+}
+
+#ifdef HAVE_DIRENT64
+DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
+{
+	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
+	//  ver should be 3, but _STAT_VER is 1
+	// no clue what it's doing
+	if (ver != _STAT_VER)
+		FATAL("GitBSLR: git called __lxstat64(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
+	
+	return inner_lstat("__lxstat", path, buf);
+}
+#endif
+
 #ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
-	// the version should be 3, but my Git uses 1
-	// probably struct stat64 changing - I don't really care about that struct, I care only about which path to (l)stat,
-	// so I'll ignore the version
+	//  ver should be 3, but _STAT_VER is 1
+	// no clue what it's doing
+	if (ver != _STAT_VER)
+		FATAL("GitBSLR: git called __lxstat64(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
 	
-	DEBUG("GitBSLR: __lxstat64(%s)\n", path);
-	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
-	{
-		DEBUG("GitBSLR: __lxstat64(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
-		int ret = __lxstat64_o(ver, path, buf);
-		int errno_tmp = errno;
-		if (ret >= 0) gitpath.try_init(path);
-		errno = errno_tmp;
-		return ret;
-	}
-	
-	int ret = __xstat64(ver, path, buf);
-	if (ret < 0)
-	{
-		DEBUG("GitBSLR: __lxstat64(%s) - untouched because can't stat (%s)\n", path, strerror(errno));
-		return __lxstat64_o(ver, path, buf);
-	}
-	
-	string newpath = gitpath.resolve_symlink(path);
-	DEBUG("%s%s\n", newpath ? " -> " : "", newpath.c_str());
-	if (newpath)
-	{
-		buf->st_mode &= ~S_IFMT;
-		buf->st_mode |= S_IFLNK;
-		buf->st_size = newpath.length();
-	}
-	return ret;
+	return inner_lstat("__lxstat64", path, buf);
 }
 #endif
 
