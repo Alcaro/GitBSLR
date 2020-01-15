@@ -21,7 +21,7 @@
 #endif
 
 // TODO: add a test for git clone
-// I don't want it to touch the network, but clones from local directories fail becaue unexpected access to <source repo location>
+// I don't want tests to touch the network, but clones from local directories fail because unexpected access to <source repo location>
 // not sure if that's fixable without creating a GITBSLR_THIRD_DIR env, and I don't know if I want to do that (needs a better name first)
 
 #undef DEBUG
@@ -149,6 +149,7 @@ public:
 	
 	string& operator+=(const string& other)
 	{
+		if (!other.len) return *this;
 		ptr = realloc(ptr, len+other.len+1);
 		strcpy(ptr+len, other.ptr);
 		len += other.len;
@@ -208,11 +209,13 @@ public:
 
 
 typedef int (*lstat_t)(const char * path, struct stat* buf);
+typedef int (*__lxstat_t)(int ver, const char * path, struct stat* buf);
 typedef ssize_t (*readlink_t)(const char * path, char * buf, size_t bufsiz);
 typedef struct dirent* (*readdir_t)(DIR* dirp);
 typedef int (*symlink_t)(const char * target, const char * linkpath);
 
 static lstat_t lstat_o;
+static __lxstat_t __lxstat_o;
 static readlink_t readlink_o;
 static readdir_t readdir_o;
 static symlink_t symlink_o;
@@ -264,6 +267,10 @@ static string realpath_d(const string& path)
 
 static string dirname_d(const string& path)
 {
+	if (path.endswith("/"))
+	{
+		return dirname_d(string(path, path.length()-1));
+	}
 	const char * start = path;
 	const char * last = strrchr(start, '/');
 	return string(start, last-start+1);
@@ -277,6 +284,7 @@ enum path_class_t {
 	cls_unknown, // if fatal_unknown is true, this can't be returned; if it would be this, the program terminates instead
 };
 class path_handler {
+public:
 	// These two always end with slash, if configured.
 	string work_tree;
 	string git_dir;
@@ -289,7 +297,6 @@ class path_handler {
 		return string(start, end-start);
 	}
 	
-public:
 	bool initialized() const { return work_tree; }
 	
 	// Paths may, but are not required to, end with a slash. However, they must be absolute.
@@ -298,6 +305,9 @@ public:
 	{
 		if (dir.endswith("/")) git_dir = dir;
 		else git_dir = dir+"/";
+		
+		if (!git_dir.endswith("/.git/"))
+			FATAL("GitBSLR: The git directory path must end with .git, it can't be %s\n", git_dir.c_str());
 		
 		if (!work_tree)
 		{
@@ -334,7 +344,7 @@ public:
 	}
 	
 	// This one does not consider GITBSLR_FOLLOW.
-	// If the Git directory or work tree are not yet known, this function configures them.
+	// If the Git directory or work tree are not yet known, this function won't return that.
 	path_class_t classify(const string& path, bool fatal_unknown) const
 	{
 		if (path[0] != '/')
@@ -499,9 +509,16 @@ static path_handler gitpath;
 
 
 
+static int lstat_lxstat_wrap(const char * path, struct stat * buf) { return __lxstat_o(_STAT_VER, path, buf); }
 __attribute__((constructor)) static void init()
 {
 	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
+	if (!lstat_o) lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat64");
+	if (!lstat_o)
+	{
+		__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
+		if (__lxstat_o) lstat_o = lstat_lxstat_wrap;
+	}
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
@@ -509,6 +526,13 @@ __attribute__((constructor)) static void init()
 	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 #endif
+	
+	if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
+#ifdef HAVE_DIRENT64
+		|| !__lxstat64_o || !readdir64_o
+#endif
+		)
+		FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug)\n");
 	
 	//GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
@@ -557,10 +581,8 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	int ret = stat(path, buf);
 	if (ret < 0)
 	{
-		int errno_tmp = errno;
-		DEBUG("GitBSLR: lstat(%s) - untouched because can't stat (%s)\n", path, strerror(errno_tmp));
-		errno = errno_tmp;
-		return ret;
+		DEBUG("GitBSLR: lstat(%s) - untouched because can't stat (%s)\n", path, strerror(errno));
+		return lstat_o(path, buf);
 	}
 	
 	string newpath = gitpath.resolve_symlink(path);
@@ -597,10 +619,8 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	int ret = __xstat64(ver, path, buf);
 	if (ret < 0)
 	{
-		int errno_tmp = errno;
-		DEBUG("GitBSLR: __lxstat64(%s) - untouched because can't stat (%s)\n", path, strerror(errno_tmp));
-		errno = errno_tmp;
-		return ret;
+		DEBUG("GitBSLR: __lxstat64(%s) - untouched because can't stat (%s)\n", path, strerror(errno));
+		return __lxstat64_o(ver, path, buf);
 	}
 	
 	string newpath = gitpath.resolve_symlink(path);
@@ -639,57 +659,77 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
-	//TODO: rewrite this function, use more gitpath
-	//needs more robust tests first
-	//also make sure to reject targets containing /.git/,
-	// even if that's a .git other than current work tree - can't have repos corrupt each other
 	DEBUG("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
 	
 	if (strstr(linkpath, "/.git/"))
 	{
-		//git init (and clone) create a symlink at some random filename in .git to 'testing' for whatever reason. let it
+		//git init (and clone) create a symlink at some random filename in .git to 'testing', to check if that works. let it
 		return symlink_o(target, linkpath);
 	}
-	
-	string reporoot_abs = realpath_d(".");
-	
-	string target_tmp;
-	if (target[0]=='/') target_tmp = target;
-	else target_tmp = dirname_d(reporoot_abs+"/"+linkpath)+target;
-	
-	string target_abs = realpath_d(target_tmp);
-	
-	if (!target_abs)
+	if ((string("/")+target+"/").contains("/.git/")) // make sure to reject all .git, not just current gitdir
 	{
-		//TODO: figure out what this should really do
-fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since that target doesn't exist", linkpath, target);
-//puts(string("A")+reporoot_abs);
-//puts(string("B")+target);
-//puts(string("C")+linkpath);
-//puts(string("D")+target_tmp);
-//puts(string("E")+target_abs);
-errno = EPERM;
-return -1;
-		target_abs = realpath_d(dirname_d(target_tmp));
-	}
-	
-	if ((target_abs+"/").contains("/.git/"))
-	{
-		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since that's under .git/", linkpath, target);
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since that's under .git/\n", linkpath, target);
 		errno = EPERM;
 		return -1;
 	}
-	else if (!reporoot_abs || !target_abs || (reporoot_abs != target_abs && !target_abs.startswith(reporoot_abs+"/")))
+	if (!gitpath.work_tree)
 	{
-		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since %s is not under %s",
-		                linkpath, target, target_abs.c_str(), reporoot_abs.c_str());
+		fprintf(stderr, "GitBSLR: cannot create symlinks before finding the work tree (this is a GitBSLR bug, please report it)");
 		errno = EPERM;
 		return -1;
 	}
-	else
+	
+	if (linkpath[0] == '/')
 	{
-		return symlink_o(target, linkpath);
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s; absolute paths are not allowed\n", linkpath, target);
+		errno = EPERM;
+		return -1;
 	}
+	
+	int n_leading_up = 0;
+	while (memcmp(target + n_leading_up*3, "../", 3) == 0)
+		n_leading_up++;
+	if ((string(target + n_leading_up*3)+"/").contains("/../"))
+	{
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s; ../ components must be at the start\n", linkpath, target);
+		errno = EPERM;
+		return -1;
+	}
+	
+	// the repo root, and every symlink, is one-way; links may not point up past them
+	string linkpath_abs = realpath_d(".")+"/"+linkpath;
+	for (int i=0;i<=n_leading_up;i++)
+	{
+		linkpath_abs = dirname_d(linkpath_abs);
+		
+		struct stat buf;
+		if (lstat_o(linkpath_abs, &buf) < 0)
+		{
+			int errno_tmp = errno;
+			fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since %s is inaccessible (%s)\n",
+			                linkpath, target, linkpath_abs.c_str(), strerror(errno_tmp));
+			errno = errno_tmp;
+			return -1;
+		}
+		if (S_ISLNK(buf.st_mode))
+		{
+			fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since %s is a symlink\n",
+			                linkpath, target, linkpath_abs.c_str());
+			errno = EPERM;
+			return -1;
+		}
+	}
+	
+	if (!(linkpath_abs+"/").startswith(gitpath.work_tree))
+	{
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s, since %s is not under %s\n",
+		                linkpath, target, linkpath_abs.c_str(), gitpath.work_tree.c_str());
+		errno = EPERM;
+		return -1;
+	}
+	
+	DEBUG("GitBSLR: symlink(%s <- %s) - creating\n", target, linkpath);
+	return symlink_o(target, linkpath);
 }
 
 //I could hijack opendir and keep track of what path this DIR* is for, or I could tell Git that we don't know the filetype.

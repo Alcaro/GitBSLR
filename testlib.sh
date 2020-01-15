@@ -28,7 +28,7 @@ export GITBSLR_DEBUG=1
 
 ln_sr()
 {
-  #Perl is no beauty, but anything else I could find requires Bash, or other programs not guaranteed to exist
+  #Perl is no beauty, but anything else I could find requires bash, or other programs not guaranteed to exist
   ln -sr $1 $2 || perl -e'use File::Spec; use File::Basename;
                           symlink File::Spec->abs2rel($ARGV[0], dirname($ARGV[1])), $ARGV[1] or
                               die qq{cannot create symlink: $!$/}' $1 $2

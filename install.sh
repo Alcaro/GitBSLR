@@ -65,9 +65,9 @@ if [ "$(which git)" != $TARGET/git ]; then
       echo "  export PATH=\"\$HOME/bin:\$PATH\""
       echo "or restart your terminal to complete the installation"
     elif [ TARGET = "$HOME/bin" ]; then
-        echo "Installed GitBSLR to $TARGET/git; run"
-        echo "  echo 'export PATH=\"\$HOME/bin:\$PATH\"' >> ~/.profile"
-        echo "and restart your terminal to complete the installation"
+      echo "Installed GitBSLR to $TARGET/git; run"
+      echo "  echo 'export PATH=\"\$HOME/bin:\$PATH\"' >> ~/.profile"
+      echo "and restart your terminal to complete the installation"
     else
       echo "warning: installed GitBSLR to $TARGET/git, but $TARGET/ is not in your PATH; fix that to complete the installation"
     fi
@@ -76,6 +76,6 @@ if [ "$(which git)" != $TARGET/git ]; then
 else
   echo "Installed GitBSLR to $TARGET/git"
 fi
-echo "To verify if GitBSLR is correctly installed, run"
+echo "To verify whether GitBSLR is correctly installed, run"
 echo "  GITBSLR_DEBUG=1 git version"
 echo "and check if it says \"GitBSLR: Loaded\"."
