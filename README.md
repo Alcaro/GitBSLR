@@ -1,7 +1,3 @@
-maybe it's .txt to offer an obvious opportunity for improvement, so I can determine the repo's popularity?
-
-If so, it's served its purpose. And stars are good enough.
-
 GitBSLR - make Git follow symlinks
 ========
 
