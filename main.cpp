@@ -2,6 +2,14 @@
 // GitBSLR is available under the same license as Git itself. If Git relicenses, you may choose
 //    whether to use GitBSLR under GPLv2 or Git's new license.
 
+// Terminology:
+// Git - obvious
+// GitBSLR - this tool
+// Work tree - where your repo is checked out
+// Git directory - .git, usually in work tree
+// Real path - a path as seen by the kernel
+// Virtual path - a path as seen by Git (always relative to work tree)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,10 +22,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef BUG_URL
+#define BUG_URL "https://github.com/Alcaro/GitBSLR/issues"
+#endif
 #if defined(__linux__)
 # define HAVE_DIRENT64
 #else
-# warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues/new"
+# warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues"
 #endif
 
 // TODO: add a test for git clone
@@ -25,9 +36,10 @@
 // not sure if that's fixable without creating a GITBSLR_THIRD_DIR env, and I don't know if I want to do that (needs a better name first)
 
 #undef DEBUG
-#define DEBUG(...) do { if (debug) fprintf(stderr, __VA_ARGS__); } while(0)
+#define DEBUG(...) do { if (debug_level >= 1) fprintf(stderr, __VA_ARGS__); } while(0)
+#define DEBUG_VERBOSE(...) do { if (debug_level >= 2) fprintf(stderr, __VA_ARGS__); } while(0)
 #define FATAL(...) do { fprintf(stderr, __VA_ARGS__); exit(1); } while(0)
-static bool debug = false;
+static int debug_level = 0;
 
 
 class anyptr {
@@ -230,9 +242,9 @@ static __lxstat64_t __lxstat64_o;
 static readdir64_t readdir64_o;
 #endif
 
-inline void ensure_type_correctness()
+static inline void ensure_type_correctness()
 {
-	//If any of the above typedefs are incorrect, these will throw various compile errors.
+	// If any of the above typedefs are incorrect, these will throw various compile errors.
 	(void)(lstat_o == lstat);
 	(void)(readlink_o == readlink);
 	(void)(readdir_o == readdir);
@@ -295,7 +307,7 @@ public:
 	string work_tree;
 	string git_dir;
 	
-	//Input may or may not have slash. Output will not have a slash.
+	// Input may or may not have slash. Output will not have a slash.
 	string parent_dir(const string& path)
 	{
 		const char * start = path.c_str();
@@ -306,7 +318,7 @@ public:
 	bool initialized() const { return work_tree; }
 	
 	// Paths may, but are not required to, end with a slash. However, they must be absolute.
-	// Configuring the Git directory will configure the work tree, if it's not set already.
+	// Configuring the Git directory will also configure the work tree, if it's not set already.
 	void set_git_dir(const string& dir)
 	{
 		if (dir.endswith("/")) git_dir = dir;
@@ -368,9 +380,16 @@ public:
 			return cls_work_tree;
 		if (fatal_unknown)
 		{
-			FATAL("GitBSLR: unexpected access to %s; should only be in %s or %s. "
-			      "Either you're missing GITBSLR_GIT_DIR and/or GITBSLR_WORK_TREE, or you found a GitBSLR bug.\n",
-			      path.c_str(), work_tree.c_str(), git_dir.c_str());
+			if (!git_dir || !work_tree)
+				FATAL("GitBSLR: unexpected access to %s before locating Git directory and/or work tree. "
+				      "Either you're missing GITBSLR_GIT_DIR and/or GITBSLR_WORK_TREE, or you found a GitBSLR bug. "
+				      "If latter, please report it: " BUG_URL "\n",
+				      path.c_str());
+			else
+				FATAL("GitBSLR: unexpected access to %s; should only be in %s or %s. "
+				      "Either you're missing GITBSLR_GIT_DIR and/or GITBSLR_WORK_TREE, or you found a GitBSLR bug. "
+				      "If latter, please report it: " BUG_URL "\n",
+				      path.c_str(), work_tree.c_str(), git_dir.c_str());
 		}
 		return cls_unknown;
 	}
@@ -431,7 +450,7 @@ public:
 	}
 	
 	//Input:
-	// Any path within the work tree.
+	// Any virtual path.
 	//Output:
 	// If that path should refer to a symlink, return what it points to, relative to the presumed link's parent directory.
 	// If it doesn't exist, or shouldn't be a symlink, return a blank string.
@@ -439,7 +458,7 @@ public:
 	string resolve_symlink(string path) const
 	{
 		//algorithm:
-		//if the path is inside .git/:
+		//if the path is inside git directory:
 		// tell the truth
 		//for each prefix of the path:
 		// if path is the same thing as prefix (realpath identical):
@@ -448,25 +467,22 @@ public:
 		//  it's a link (but check realpath of all prefixes to determine where it leads)
 		//otherwise, it's not a link
 		
-		//this is wrong if the link is behind another link and the target is somewhere other than what Git expects,
-		// but that's rare, low-impact, and hard to find a good algorithm for, so I'll just leave it unimplemented
-		
 		string path_linktarget = readlink_d(path);
 		
 		string root_abs = realpath_d(".");
 		if (root_abs+"/" != work_tree)
-			FATAL("GitBSLR: internal error, attempted symlink check while cwd != worktree. Please report this bug.\n");
+			FATAL("GitBSLR: internal error, attempted symlink check while cwd != worktree. Please report this bug: " BUG_URL "\n");
 		
 		string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
 		if (!path_abs) return ""; // nonexistent -> not a symlink
-		if ((path_abs+"/").startswith(git_dir)) return path_linktarget; // under .git -> return truth
+		if ((path_abs+"/").startswith(git_dir)) return path_linktarget; // git dir -> return truth
 		if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
-		if (path == root_abs) return ""; // repo root is not a link; repo root can be linked, but the actual absolute path isn't a link
-		if (path.startswith(root_abs+"/")) // if path is absolute and in the repo, turn it relative to repo root and check that
+		if (path == root_abs) return ""; // telling git that work tree is a link won't end well
+		if (path.startswith(work_tree)) // if path is absolute and in work tree, discard work tree prefix and turn it relative
 			path = string(path.c_str() + strlen(root_abs)+1);
 		
 		if (path[0] == '/')
-			FATAL("GitBSLR: internal error, unexpected absolute path %s\n", path.c_str());
+			FATAL("GitBSLR: internal error, unexpected absolute path %s. Please report this bug: " BUG_URL "\n", path.c_str());
 		
 		const char * start = path;
 		const char * iter = start;
@@ -525,7 +541,9 @@ __attribute__((constructor)) static void init()
 {
 	if (getenv("GITBSLR_DEBUG"))
 	{
-		debug = true;
+		char * end;
+		debug_level = strtol(getenv("GITBSLR_DEBUG"), &end, 0);
+		if (*end) debug_level = 1;
 		DEBUG("GitBSLR: Loaded\n");
 	}
 	
@@ -550,9 +568,9 @@ __attribute__((constructor)) static void init()
 		|| !__lxstat64_o || !readdir64_o
 #endif
 		)
-		FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug)\n");
+		FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug, please report it: " BUG_URL ")\n");
 	
-	//GitBSLR shouldn't be loaded into the EDITOR
+	// GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
 	
 	const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
@@ -600,7 +618,7 @@ static int lstat_o_3264(const char * path, struct stat64* buf)
 template<typename stat_t>
 int inner_lstat(const char * fn_name, const char * path, stat_t* buf)
 {
-	DEBUG("GitBSLR: %s(%s)\n", fn_name, path);
+	DEBUG_VERBOSE("GitBSLR: %s(%s)\n", fn_name, path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
 		DEBUG("GitBSLR: %s(%s) - untouched because %s\n", fn_name, path, gitpath.initialized() ? "in .git" : ".git not yet located");
@@ -619,14 +637,15 @@ int inner_lstat(const char * fn_name, const char * path, stat_t* buf)
 	}
 	
 	string newpath = gitpath.resolve_symlink(path);
-	DEBUG("%s%s\n", newpath ? " -> " : "", newpath.c_str());
+	if (newpath) DEBUG("GitBSLR: %s(%s) -> %s\n", fn_name, path, newpath.c_str());
+	else DEBUG("GitBSLR: %s(%s) - not a link\n", fn_name, path);
 	if (newpath)
 	{
 		buf->st_mode &= ~S_IFMT;
 		buf->st_mode |= S_IFLNK;
 		buf->st_size = newpath.length();
 	}
-	//looking for the else clause to make it say 'no, it's not a link'? that's done by calling stat rather than lstat
+	// looking for the else clause to make it say 'no, it's not a link'? that's done by calling stat rather than lstat
 	return ret;
 }
 
@@ -642,7 +661,7 @@ DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
 	//  ver should be 3, but _STAT_VER is 1
 	// no clue what it's doing
 	if (ver != _STAT_VER)
-		FATAL("GitBSLR: git called __lxstat64(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
+		FATAL("GitBSLR: git called __lxstat(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
 	
 	return inner_lstat("__lxstat", path, buf);
 }
@@ -651,9 +670,6 @@ DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
 #ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
-	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
-	//  ver should be 3, but _STAT_VER is 1
-	// no clue what it's doing
 	if (ver != _STAT_VER)
 		FATAL("GitBSLR: git called __lxstat64(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
 	
@@ -663,7 +679,7 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 {
-	DEBUG("GitBSLR: readlink(%s)\n", path);
+	DEBUG_VERBOSE("GitBSLR: readlink(%s)\n", path);
 	if (!gitpath.initialized() || gitpath.is_in_git_dir(path))
 	{
 		DEBUG("GitBSLR: readlink(%s) - untouched because %s\n", path, gitpath.initialized() ? "in .git" : ".git not yet located");
@@ -685,11 +701,11 @@ DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
 
 DLLEXPORT int symlink(const char * target, const char * linkpath)
 {
-	DEBUG("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
+	DEBUG_VERBOSE("GitBSLR: symlink(%s <- %s)\n", target, linkpath);
 	
 	if (strstr(linkpath, "/.git/"))
 	{
-		//git init (and clone) create a symlink at some random filename in .git to 'testing', to check if that works. let it
+		// git init (and clone) create a symlink at some random filename in .git to 'testing', to check if that works. let it
 		return symlink_o(target, linkpath);
 	}
 	if ((string("/")+target+"/").contains("/.git/")) // make sure to reject all .git, not just current gitdir
@@ -700,14 +716,15 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	}
 	if (!gitpath.work_tree)
 	{
-		fprintf(stderr, "GitBSLR: cannot create symlinks before finding the work tree (this is a GitBSLR bug, please report it)");
+		fprintf(stderr, "GitBSLR: cannot create symlinks before finding the work tree (this is a GitBSLR bug, please report it: "
+		                BUG_URL ")");
 		errno = EPERM;
 		return -1;
 	}
 	
 	if (linkpath[0] == '/')
 	{
-		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to %s; absolute paths are not allowed\n", linkpath, target);
+		fprintf(stderr, "GitBSLR: link at %s is not allowed to point to absolute path %s\n", linkpath, target);
 		errno = EPERM;
 		return -1;
 	}
@@ -722,7 +739,7 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 		return -1;
 	}
 	
-	// the repo root, and every symlink, is one-way; links may not point up past them
+	// the work tree, and every symlink, is one-way; links may not point up past them
 	string linkpath_abs = realpath_d(".")+"/"+linkpath;
 	for (int i=0;i<=n_leading_up;i++)
 	{
@@ -758,8 +775,8 @@ DLLEXPORT int symlink(const char * target, const char * linkpath)
 	return symlink_o(target, linkpath);
 }
 
-//I could hijack opendir and keep track of what path this DIR* is for, or I could tell Git that we don't know the filetype.
-//The latter causes Git to fall back to some appropriate stat() variant, where I have the path easily available.
+// I could hijack opendir and keep track of what path this DIR* is for, or I could tell Git that we don't know the filetype.
+// The latter causes Git to fall back to some appropriate stat() variant, where I have the path easily available.
 DLLEXPORT struct dirent* readdir(DIR* dirp)
 {
 	dirent* r = readdir_o(dirp);
