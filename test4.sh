@@ -37,27 +37,29 @@ ln_sr test/expected/file        test/expected/to_file
 ln_sr test/repo/to_file         test/repo/to_to_file
 ln_sr test/expected/to_file     test/expected/to_to_file
 
-#TODO: this is a bug, but its impact is minuscle, and it would require some pretty complex tricks to untangle
-## repo/a -> repo/b -> not_repo/c - should inline b, keep a as link
-#echo test >                     test/outfile
-#ln_sr test/outfile              test/repo/to_outfile
-#echo test >                     test/expected/to_outfile
-#ln_sr test/repo/to_outfile      test/repo/to_to_outfile
-#ln_sr test/expected/to_outfile  test/expected/to_to_outfile
-
 # repo/a -> not_repo/b -> repo/c - should inline a once, leaving it as link to c
 ln_sr test/repo/file            test/file_detour
 ln_sr test/file_detour          test/repo/to_to_file_detour
 ln_sr test/expected/file        test/expected/to_to_file_detour
 
-#TODO: this is a bug, but I can't find how to fix it; it'd require finding the best place where not_repo/b/../repo is mapped in the repo
-#while one place is guaranteed to exist, links behind a GITBSLR_FOLLOW (with the original ignored) shouldn't point to the 'real' path
-## repo/a -> not_repo/b; not_repo/b/c -> repo/d - should inline a, and leave c as link, while ensuring it still points where it should
-#mkdir                           test/dir
-#ln_sr test/dir                  test/repo/to_dir
-#mkdir                           test/expected/to_dir
-#ln_sr test/repo/file            test/dir/to_file
-#ln_sr test/expected/file        test/expected/to_dir/to_file
+# repo/a -> not_repo/b; not_repo/b/c -> repo/d - should inline a, and leave c as link, while ensuring it still points where it should
+mkdir                           test/dir
+ln_sr test/dir                  test/repo/to_dir
+mkdir                           test/expected/to_dir
+ln_sr test/repo/file            test/dir/to_file
+ln_sr test/expected/file        test/expected/to_dir/to_file
+
+# the above, but with an extra subdirectory
+# repo/a -> not_repo/b; not_repo/b/c -> repo/d - should inline a, and leave c as link, while ensuring it still points where it should
+mkdir                           test/repo/sub
+mkdir                           test/expected/sub
+echo test >                     test/repo/sub/file
+echo test >                     test/expected/sub/file
+mkdir                           test/subdir
+ln_sr test/subdir               test/repo/sub/to_subdir
+mkdir                           test/expected/sub/to_subdir
+ln_sr test/repo/sub/file        test/subdir/to_file
+ln_sr test/expected/sub/file    test/expected/sub/to_subdir/to_file
 
 #TODO: figure out what to do with links to nonexistent in-repo, or out-of-repo, targets
 

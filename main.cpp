@@ -522,7 +522,35 @@ public:
 			{
 				if (!target_is_in_repo) return ""; // if it'd point outside the repo, it's not a link
 				if (link_force_inline(path)) return ""; // if GITBSLR_FOLLOW says inline, it's not a link
-				return path_linktarget;
+				
+				// if the link's realpath is not in the work dir, but the target is, ignore readlink and create a new path
+				if (!newpath_abs.startswith(work_tree))
+				{
+					// path is virtual path to link
+					// path_abs is real path to link, including work tree
+					string& source_virt = path; // rename this variable
+					string target_virt = string(path_abs.c_str() + strlen(root_abs)+1);
+					
+					// if <wtree>/a/b/c points to <wtree>/a/d, emit ../d, not ../../a/d
+					size_t start = 0;
+					for (size_t i=0;source_virt[i] == target_virt[i];i++)
+					{
+						if (source_virt[i] == '/') start = i+1;
+					}
+					
+					string up;
+					const char * next = strchr(source_virt.c_str()+start, '/');
+					while (next)
+					{
+						up += "../";
+						next = strchr(next+1, '/');
+					}
+					return up + (target_virt.c_str()+start);
+				}
+				else
+				{
+					return path_linktarget;
+				}
 			}
 		}
 	}
