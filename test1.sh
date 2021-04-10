@@ -6,6 +6,7 @@ cd $(dirname $0)
 . ./testlib.sh
 
 #This script tests Git's basics: init, add, commit, checkout (latter via reset).
+#To run the tests, `make test`
 
 #input:
 mkdir                                     test/input/

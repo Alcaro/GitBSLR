@@ -601,6 +601,10 @@ __attribute__((constructor)) static void init()
 	// GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
 	
+	// if this env is set and the entire repo is behind a symlink, Git occasionally accesses it via the symlink instead
+	// 
+	unsetenv("PWD");
+	
 	const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
 	if (gitbslr_git_dir)
 	{

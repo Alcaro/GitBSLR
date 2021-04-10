@@ -2,7 +2,7 @@
 # GitBSLR is available under the same license as Git itself.
 
 ifeq ($(shell uname -s),Darwin)
-  $(error This program does not function on OSX. I couldn't find a functional LD_PRELOAD equivalent.)
+  $(error This program does not function on macOS. I couldn't find a functional LD_PRELOAD equivalent.)
 endif
 
 OPT ?= 0
@@ -45,11 +45,12 @@ uninstall:
 	./install.sh uninstall
 
 test: gitbslr.so
-	sh test.sh  | tee /dev/stderr | grep -q 'Test passed'
+	sh test1.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test2.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test3.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test4.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test5.sh | tee /dev/stderr | grep -q 'Test passed'
+	sh test6.sh | tee /dev/stderr | grep -q 'Test passed'
 	rm -rf test/
 	echo All tests passed
 check: test
