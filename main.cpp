@@ -26,10 +26,6 @@
 #define BUG_URL "https://github.com/Alcaro/GitBSLR/issues"
 #endif
 
-//x86_64-linux-gnu/sys/stat.h:__NTH (stat64 (const char *__path, struct stat64 *__statbuf))
-//x86_64-linux-gnu/sys/stat.h:__NTH (lstat64 (const char *__path, struct stat64 *__statbuf))
-//x86_64-linux-gnu/sys/stat.h:__NTH (fstat64 (int __fd, struct stat64 *__statbuf))
-
 #if defined(__linux__)
 # define HAVE_DIRENT64 1
 #else
