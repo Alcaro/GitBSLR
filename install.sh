@@ -79,3 +79,7 @@ fi
 echo "To verify whether GitBSLR is correctly installed, run"
 echo "  GITBSLR_DEBUG=1 git version"
 echo "and check if it says \"GitBSLR: Loaded\"."
+
+echo "You should also run GitBSLR's test suite, with"
+echo "  make test"
+echo "to ensure GitBSLR works on your platform."

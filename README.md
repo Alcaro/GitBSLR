@@ -20,9 +20,10 @@ To enable GitBSLR on your machine:
 1. Install your favorite Linux flavor (or other Unix-like environment, if you're feeling lucky)
 2. Install make and a C++ compiler; only tested with GNU make and g++, but others will probably work (if not, report the bug)
 3. Compile GitBSLR with 'make', or 'make OPT=1' to enable my recommended optimizations, or 'make CFLAGS=-O3 LFLAGS=-s' if you want your own flags
-4. Add a wrapper script in your PATH that sets LD_PRELOAD=/path/to/gitbslr.so, then execs the real Git
+4. Run GitBSLR's test suite, with 'make test'; GitBSLR makes many guesses regarding implementation details, and may yield subtle breakage or security holes if it guesses wrong
+5. Add a wrapper script in your PATH that sets LD_PRELOAD=/path/to/gitbslr.so, then execs the real Git
 
-install.sh will do steps 3 and 4 for you.
+install.sh will do steps 3 and 5 for you, but not 1, 2 or 4.
 
 Configuration: GitBSLR obeys a few environment variables, which can be set per-invocation, or permanently in the wrapper script:
 - GITBSLR_DEBUG

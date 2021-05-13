@@ -25,10 +25,22 @@
 #ifndef BUG_URL
 #define BUG_URL "https://github.com/Alcaro/GitBSLR/issues"
 #endif
+
+//x86_64-linux-gnu/sys/stat.h:__NTH (stat64 (const char *__path, struct stat64 *__statbuf))
+//x86_64-linux-gnu/sys/stat.h:__NTH (lstat64 (const char *__path, struct stat64 *__statbuf))
+//x86_64-linux-gnu/sys/stat.h:__NTH (fstat64 (int __fd, struct stat64 *__statbuf))
+
 #if defined(__linux__)
-# define HAVE_DIRENT64
+# define HAVE_DIRENT64 1
 #else
+# define HAVE_DIRENT64 0
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues"
+#endif
+
+#ifdef _STAT_VER
+# define HAVE_STAT_VER 1
+#else
+# define HAVE_STAT_VER 0
 #endif
 
 // TODO: add a test for git clone
@@ -230,31 +242,40 @@ static readlink_t readlink_o;
 static readdir_t readdir_o;
 static symlink_t symlink_o;
 
-#ifdef _STAT_VER
+#if HAVE_STAT_VER
 typedef int (*__lxstat_t)(int ver, const char * path, struct stat* buf);
 static __lxstat_t __lxstat_o;
 #endif
 
-#ifdef HAVE_DIRENT64
-typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
+#if HAVE_DIRENT64
 typedef struct dirent64* (*readdir64_t)(DIR* dirp);
-static __lxstat64_t __lxstat64_o;
 static readdir64_t readdir64_o;
+typedef int (*lstat64_t)(const char * path, struct stat64* buf);
+static lstat64_t lstat64_o;
+#endif
+
+#if HAVE_DIRENT64 && HAVE_STAT_VER
+typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
+static __lxstat64_t __lxstat64_o;
 #endif
 
 static inline void ensure_type_correctness()
 {
 	// If any of the above typedefs are incorrect, these will throw various compile errors.
+	// If the functions don't exist at all, it will also throw errors, signaling that some of the HAVE_ checks are wrong.
 	(void)(lstat_o == lstat);
 	(void)(readlink_o == readlink);
 	(void)(readdir_o == readdir);
 	(void)(symlink_o == symlink);
-#ifdef _STAT_VER
+#if HAVE_STAT_VER
 	(void)(__lxstat == __lxstat_o);
 #endif
-#ifdef HAVE_DIRENT64
-	(void)(__lxstat64 == __lxstat64_o);
+#if HAVE_DIRENT64
 	(void)(readdir64 == readdir64_o);
+	(void)(lstat64_o == lstat64);
+#endif
+#if HAVE_DIRENT64 && HAVE_STAT_VER
+	(void)(__lxstat64 == __lxstat64_o);
 #endif
 }
 
@@ -559,10 +580,16 @@ static path_handler gitpath;
 
 
 
-#ifdef _STAT_VER
+#if HAVE_STAT_VER
 static int lstat_lxstat_wrap(const char * path, struct stat * buf)
 {
 	return __lxstat_o(_STAT_VER, path, buf);
+}
+#endif
+#if HAVE_DIRENT64 && HAVE_STAT_VER
+static int lstat64_lxstat_wrap(const char * path, struct stat64 * buf)
+{
+	return __lxstat64_o(_STAT_VER, path, buf);
 }
 #endif
 __attribute__((constructor)) static void init()
@@ -576,7 +603,7 @@ __attribute__((constructor)) static void init()
 	}
 	
 	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-#ifdef _STAT_VER
+#if HAVE_STAT_VER
 	if (!lstat_o)
 	{
 		__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
@@ -586,14 +613,22 @@ __attribute__((constructor)) static void init()
 	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
-#ifdef HAVE_DIRENT64
-	__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
+	
+#if HAVE_DIRENT64
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
+	lstat64_o = (lstat64_t)dlsym(RTLD_NEXT, "lstat64");
+#if HAVE_STAT_VER
+	if (!lstat64_o)
+	{
+		__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
+		if (__lxstat64_o) lstat64_o = lstat64_lxstat_wrap;
+	}
+#endif
 #endif
 	
 	if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
-#ifdef HAVE_DIRENT64
-		|| !__lxstat64_o || !readdir64_o
+#if HAVE_DIRENT64
+		|| !readdir64_o || !lstat64_o
 #endif
 		)
 		FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug, please report it: " BUG_URL ")\n");
@@ -601,8 +636,8 @@ __attribute__((constructor)) static void init()
 	// GitBSLR shouldn't be loaded into the EDITOR
 	unsetenv("LD_PRELOAD");
 	
-	// if this env is set and the entire repo is behind a symlink, Git occasionally accesses it via the symlink instead
-	// 
+	// if this env is set and the entire repo is behind a symlink, Git occasionally accesses it via the link instead
+	// GitBSLR will see this as access to an unrelated path and ask for a bug report
 	unsetenv("PWD");
 	
 	const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
@@ -636,14 +671,14 @@ static int lstat_o_3264(const char * path, struct stat* buf)
 {
 	return lstat_o(path, buf);
 }
-#ifdef HAVE_DIRENT64
+#if HAVE_DIRENT64
 static int stat_3264(const char * path, struct stat64* buf)
 {
-	return __xstat64(_STAT_VER, path, buf);
+	return stat64(path, buf);
 }
 static int lstat_o_3264(const char * path, struct stat64* buf)
 {
-	return __lxstat64_o(_STAT_VER, path, buf);
+	return lstat64_o(path, buf);
 }
 #endif
 
@@ -686,26 +721,38 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return inner_lstat("lstat", path, buf);
 }
 
-#ifdef HAVE_DIRENT64
 DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
 {
 	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
 	//  ver should be 3, but _STAT_VER is 1
 	// no clue what it's doing
+	// and glibc 2.33 deletes _STAT_VER from the headers
+#if HAVE_STAT_VER
 	if (ver != _STAT_VER)
 		FATAL("GitBSLR: git called __lxstat(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
 	
 	return inner_lstat("__lxstat", path, buf);
-}
+#else
+	FATAL("GitBSLR: git unexpectedly called __lxstat; are Git and GitBSLR compiled against different libc?\n");
 #endif
+}
 
-#ifdef HAVE_DIRENT64
+#if HAVE_DIRENT64
+DLLEXPORT int lstat64(const char * path, struct stat64* buf)
+{
+	return inner_lstat("lstat64", path, buf);
+}
+
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
+#if HAVE_STAT_VER
 	if (ver != _STAT_VER)
 		FATAL("GitBSLR: git called __lxstat64(%s) with wrong version (got %d, expected %d)\n", path, ver, _STAT_VER);
-	
 	return inner_lstat("__lxstat64", path, buf);
+	
+#else
+	FATAL("GitBSLR: git unexpectedly called __lxstat64; are Git and GitBSLR compiled against different libc?\n");
+#endif
 }
 #endif
 
@@ -815,7 +862,7 @@ DLLEXPORT struct dirent* readdir(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
-#ifdef HAVE_DIRENT64
+#if HAVE_DIRENT64
 DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 {
 	dirent64* r = readdir64_o(dirp);
