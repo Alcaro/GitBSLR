@@ -754,6 +754,16 @@ DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 	FATAL("GitBSLR: git unexpectedly called __lxstat64; are Git and GitBSLR compiled against different libc?\n");
 #endif
 }
+#else
+DLLEXPORT int lstat64(const char * path, void* buf)
+{
+	FATAL("GitBSLR: git unexpectedly called lstat64; are Git and GitBSLR compiled against different libc?\n");
+}
+
+DLLEXPORT int __lxstat64(int ver, const char * path, void* buf)
+{
+	FATAL("GitBSLR: git unexpectedly called __lxstat64; are Git and GitBSLR compiled against different libc?\n");
+}
 #endif
 
 DLLEXPORT ssize_t readlink(const char * path, char * buf, size_t bufsiz)
@@ -868,5 +878,10 @@ DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 	dirent64* r = readdir64_o(dirp);
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
+}
+#else
+DLLEXPORT void* readdir64(DIR* dirp)
+{
+	FATAL("GitBSLR: git unexpectedly called readdir64; are Git and GitBSLR compiled against different libc?\n");
 }
 #endif
