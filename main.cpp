@@ -27,9 +27,9 @@
 #endif
 
 #if defined(__linux__)
-# define HAVE_DIRENT64 1
+# define HAVE_STAT64 1
 #else
-# define HAVE_DIRENT64 0
+# define HAVE_STAT64 0
 # warning "Untested platform, please report whether it works: https://github.com/Alcaro/GitBSLR/issues"
 #endif
 
@@ -243,14 +243,14 @@ typedef int (*__lxstat_t)(int ver, const char * path, struct stat* buf);
 static __lxstat_t __lxstat_o;
 #endif
 
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 typedef struct dirent64* (*readdir64_t)(DIR* dirp);
 static readdir64_t readdir64_o;
 typedef int (*lstat64_t)(const char * path, struct stat64* buf);
 static lstat64_t lstat64_o;
 #endif
 
-#if HAVE_DIRENT64 && HAVE_STAT_VER
+#if HAVE_STAT64 && HAVE_STAT_VER
 typedef int (*__lxstat64_t)(int ver, const char * path, struct stat64* buf);
 static __lxstat64_t __lxstat64_o;
 #endif
@@ -266,11 +266,11 @@ static inline void ensure_type_correctness()
 #if HAVE_STAT_VER
 	(void)(__lxstat == __lxstat_o);
 #endif
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 	(void)(readdir64 == readdir64_o);
 	(void)(lstat64_o == lstat64);
 #endif
-#if HAVE_DIRENT64 && HAVE_STAT_VER
+#if HAVE_STAT64 && HAVE_STAT_VER
 	(void)(__lxstat64 == __lxstat64_o);
 #endif
 }
@@ -582,7 +582,7 @@ static int lstat_lxstat_wrap(const char * path, struct stat * buf)
 	return __lxstat_o(_STAT_VER, path, buf);
 }
 #endif
-#if HAVE_DIRENT64 && HAVE_STAT_VER
+#if HAVE_STAT64 && HAVE_STAT_VER
 static int lstat64_lxstat_wrap(const char * path, struct stat64 * buf)
 {
 	return __lxstat64_o(_STAT_VER, path, buf);
@@ -610,7 +610,7 @@ __attribute__((constructor)) static void init()
 	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
 	
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 	lstat64_o = (lstat64_t)dlsym(RTLD_NEXT, "lstat64");
 #if HAVE_STAT_VER
@@ -623,7 +623,7 @@ __attribute__((constructor)) static void init()
 #endif
 	
 	if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 		|| !readdir64_o || !lstat64_o
 #endif
 		)
@@ -667,7 +667,7 @@ static int lstat_o_3264(const char * path, struct stat* buf)
 {
 	return lstat_o(path, buf);
 }
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 static int stat_3264(const char * path, struct stat64* buf)
 {
 	return stat64(path, buf);
@@ -733,7 +733,7 @@ DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
 #endif
 }
 
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 DLLEXPORT int lstat64(const char * path, struct stat64* buf)
 {
 	return inner_lstat("lstat64", path, buf);
@@ -868,7 +868,7 @@ DLLEXPORT struct dirent* readdir(DIR* dirp)
 	if (r) r->d_type = DT_UNKNOWN;
 	return r;
 }
-#if HAVE_DIRENT64
+#if HAVE_STAT64
 DLLEXPORT struct dirent64* readdir64(DIR* dirp)
 {
 	dirent64* r = readdir64_o(dirp);
