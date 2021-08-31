@@ -540,8 +540,9 @@ public:
 				if (!target_is_in_repo) return ""; // if it'd point outside the repo, it's not a link
 				if (link_force_inline(path)) return ""; // if GITBSLR_FOLLOW says inline, it's not a link
 				
-				// if the link's realpath is not in the work dir, but the target is, ignore readlink and create a new path
-				if (!newpath_abs.startswith(work_tree))
+				// if the link's target is absolute, or the realpath is not in the work dir but the target is,
+				// ignore readlink and create a new path
+				if (path_linktarget[0]=='/' || !newpath_abs.startswith(work_tree))
 				{
 					// path is virtual path to link
 					// path_abs is real path to link, including work tree

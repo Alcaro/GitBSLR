@@ -5,7 +5,7 @@
 cd $(dirname $0)
 . ./testlib.sh
 
-#This script tests some rarer stuff, like ls-files and symlinks to symlinks.
+#This script tests some rarer stuff, like ls-files, symlinks to symlinks, and symlinks to absolute paths in the repo.
 
 # ls-files
 mkdir                                    test/repo/
@@ -60,6 +60,18 @@ ln_sr test/subdir               test/repo/sub/to_subdir
 mkdir                           test/expected/sub/to_subdir
 ln_sr test/repo/sub/file        test/subdir/to_file
 ln_sr test/expected/sub/file    test/expected/sub/to_subdir/to_file
+
+# absolute symlinks into repo
+mkdir                           test/repo/sub2/
+mkdir                           test/expected/sub2/
+echo test >                     test/repo/sub2/file2
+echo test >                     test/expected/sub2/file2
+ln -s $(realpath test/repo/sub2/) test/repo/to_sub2
+ln_sr test/expected/sub2/       test/expected/to_sub2
+ln -s $(realpath test/repo/sub2/) test/repo/sub/to_sub2
+ln_sr test/expected/sub2/       test/expected/sub/to_sub2
+ln -s $(realpath test/repo/sub/file) test/repo/sub/to_subfile
+ln_sr test/expected/sub/file    test/expected/sub/to_subfile
 
 #TODO: figure out what to do with links to nonexistent in-repo, or out-of-repo, targets
 
