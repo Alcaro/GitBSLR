@@ -324,6 +324,54 @@ public:
 	string work_tree;
 	string git_dir;
 	
+	static string append_slash(string path)
+	{
+		if (path.endswith("/")) return path;
+		else return path+"/";
+	}
+	
+	// Removes ./ and ../ components from the path. Does not follow symlinks.
+	static string normalize_path(const string& path)
+	{
+		// fast path for easy cases (can't just look for "/.", that'd hit the slow path for every /.git)
+		if (!path.contains("/..") && !path.contains("/./"))
+		{
+			if (path == "/.") // I don't think this is a possible input, but better handle it anyways, for completeness
+				return "/";
+			return path;
+		}
+		
+		char * ret = strdup(path);
+		
+		size_t off_in = 0;
+		size_t off_out = 0;
+		while (ret[off_in])
+		{
+			if (ret[off_in] == '/' && ret[off_in+1] == '.')
+			{
+				if (ret[off_in+2] == '/' || ret[off_in+2] == '\0')
+				{
+					off_in += 2;
+					continue;
+				}
+				if (ret[off_in+2] == '.' && (ret[off_in+3] == '/' || ret[off_in+3] == '\0'))
+				{
+					off_in += 3;
+					if (off_out) off_out--;
+					while (off_out && ret[off_out] != '/') off_out--;
+					continue;
+				}
+			}
+			ret[off_out] = ret[off_in];
+			off_in++;
+			off_out++;
+		}
+		if (off_out == 0)         // this throws it out of bounds if input was an empty string, 
+			ret[off_out++] = '/'; // but empty string does not contain /.. so that can't happen
+		ret[off_out] = '\0';
+		return string::create_usurp(ret);
+	}
+	
 	// Input may or may not have slash. Output will not have a slash.
 	string parent_dir(const string& path)
 	{
@@ -332,29 +380,33 @@ public:
 		return string(start, end-start);
 	}
 	
-	bool initialized() const { return work_tree; }
+	bool initialized() const { return git_dir && work_tree; }
 	
 	// Paths may, but are not required to, end with a slash. However, they must be absolute.
 	// Configuring the Git directory will also configure the work tree, if it's not set already.
 	void set_git_dir(const string& dir)
 	{
-		if (dir.endswith("/")) git_dir = dir;
-		else git_dir = dir+"/";
+		git_dir = normalize_path(append_slash(dir));
 		
 		if (!git_dir.endswith("/.git/"))
 			FATAL("GitBSLR: The git directory path must end with .git, it can't be %s\n", git_dir.c_str());
 		
 		if (!work_tree)
 		{
-			set_work_tree(parent_dir(git_dir));
+			// if this repo is a submodule, .git will be accessed via a few extra ../ components
+			// the work tree will be whatever is before the ..s
+			// https://github.com/Alcaro/GitBSLR/issues/16
+			string tmp = parent_dir(dir);
+			while (tmp.endswith("/.."))
+				tmp = string(tmp, tmp.length()-3);
+			set_work_tree(normalize_path(tmp));
 			DEBUG("GitBSLR: Using work tree %s (autodetected)\n", work_tree.c_str());
 		}
 	}
 	
 	void set_work_tree(const string& dir)
 	{
-		if (dir.endswith("/")) work_tree = dir;
-		else work_tree = dir+"/";
+		work_tree = normalize_path(append_slash(dir));
 	}
 	
 	// Call only on paths known to exist. If it contains a /.git/, the Git directory is configured. This may set the work tree.
@@ -394,6 +446,12 @@ public:
 		if (work_tree && path.startswith(work_tree))
 			return cls_work_tree;
 		if (work_tree && path+"/" == work_tree)
+			return cls_work_tree;
+		// git status in a submodule will lstat the work tree and git dir, and all parents
+		// https://github.com/Alcaro/GitBSLR/issues/16
+		if (git_dir && git_dir.startswith(append_slash(path)))
+			return cls_git_dir;
+		if (work_tree && work_tree.startswith(append_slash(path)))
 			return cls_work_tree;
 		if (fatal_unknown)
 		{
@@ -488,7 +546,8 @@ public:
 		
 		string root_abs = realpath_d(".");
 		if (root_abs+"/" != work_tree)
-			FATAL("GitBSLR: internal error, attempted symlink check while cwd != worktree. Please report this bug: " BUG_URL "\n");
+			FATAL("GitBSLR: internal error, attempted symlink check while cwd (%s) != worktree (%s). Please report this bug: " BUG_URL "\n",
+				root_abs.c_str(), work_tree.c_str());
 		
 		string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
 		if (!path_abs) return ""; // nonexistent -> not a symlink
@@ -573,8 +632,6 @@ public:
 		}
 	}
 };
-static path_handler gitpath;
-
 
 
 #if HAVE_STAT_VER
@@ -589,75 +646,86 @@ static int lstat64_lxstat_wrap(const char * path, struct stat64 * buf)
 	return __lxstat64_o(_STAT_VER, path, buf);
 }
 #endif
-__attribute__((constructor)) static void init()
-{
-	if (getenv("GITBSLR_DEBUG"))
-	{
-		char * end;
-		debug_level = strtol(getenv("GITBSLR_DEBUG"), &end, 0);
-		if (*end) debug_level = 1;
-		DEBUG("GitBSLR: Loaded\n");
-	}
-	
-	lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-#if HAVE_STAT_VER
-	if (!lstat_o)
-	{
-		__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
-		if (__lxstat_o) lstat_o = lstat_lxstat_wrap;
-	}
-#endif
-	readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
-	readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
-	symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
-	
-#if HAVE_STAT64
-	readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
-	lstat64_o = (lstat64_t)dlsym(RTLD_NEXT, "lstat64");
-#if HAVE_STAT_VER
-	if (!lstat64_o)
-	{
-		__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
-		if (__lxstat64_o) lstat64_o = lstat64_lxstat_wrap;
-	}
-#endif
-#endif
-	
-	if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
-#if HAVE_STAT64
-		|| !readdir64_o || !lstat64_o
-#endif
-		)
-		FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug, please report it: " BUG_URL ")\n");
-	
-	// GitBSLR shouldn't be loaded into the EDITOR
-	unsetenv("LD_PRELOAD");
-	
-	// if this env is set and the entire repo is behind a symlink, Git occasionally accesses it via the link instead
-	// GitBSLR will see this as access to an unrelated path and ask for a bug report
-	unsetenv("PWD");
-	
-	const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
-	if (gitbslr_git_dir)
-	{
-		gitpath.set_git_dir(gitbslr_git_dir);
-		DEBUG("GitBSLR: Using git dir %s (from env)\n", gitbslr_git_dir);
-		setenv("GIT_DIR", gitbslr_git_dir, true);
-	}
-	else if (getenv("GIT_DIR"))
-		FATAL("GitBSLR: use GITBSLR_GIT_DIR, not GIT_DIR\n");
-	
-	const char * gitbslr_work_tree = getenv("GITBSLR_WORK_TREE");
-	if (gitbslr_work_tree)
-	{
-		gitpath.set_work_tree(gitbslr_work_tree);
-		DEBUG("GitBSLR: Using work tree %s (from env)\n", gitbslr_work_tree);
-		setenv("GIT_WORK_TREE", gitbslr_work_tree, true);
-	}
-	else if (getenv("GIT_WORK_TREE"))
-		FATAL("GitBSLR: use GITBSLR_WORK_TREE, not GIT_WORK_TREE\n");
-}
 
+class gitbslr {
+public:
+	path_handler gitpath;
+	
+	gitbslr()
+	{
+		// I'd prefer a function with __attribute__((constructor)), but that'd risk it running before path_handler's ctor,
+		// which will screw up everything related to GITBSLR_WORK_TREE and GITBSLR_GIT_DIR
+		if (getenv("GITBSLR_DEBUG"))
+		{
+			char * end;
+			debug_level = strtol(getenv("GITBSLR_DEBUG"), &end, 0);
+			if (*end) debug_level = 1;
+			DEBUG("GitBSLR: Loaded\n");
+		}
+		
+		lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
+	#if HAVE_STAT_VER
+		if (!lstat_o)
+		{
+			__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
+			if (__lxstat_o) lstat_o = lstat_lxstat_wrap;
+		}
+	#endif
+		readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
+		readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
+		symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
+		
+	#if HAVE_STAT64
+		readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
+		lstat64_o = (lstat64_t)dlsym(RTLD_NEXT, "lstat64");
+	#if HAVE_STAT_VER
+		if (!lstat64_o)
+		{
+			__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
+			if (__lxstat64_o) lstat64_o = lstat64_lxstat_wrap;
+		}
+	#endif
+	#endif
+		
+		if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
+	#if HAVE_STAT64
+			|| !readdir64_o || !lstat64_o
+	#endif
+			)
+			FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug, please report it: " BUG_URL ")\n");
+		
+		// GitBSLR shouldn't be loaded into the EDITOR
+		unsetenv("LD_PRELOAD");
+		
+		// if this env is set and the entire repo is behind a symlink, Git occasionally accesses it via the link instead
+		// GitBSLR will see this as access to an unrelated path and ask for a bug report
+		unsetenv("PWD");
+		
+		const char * gitbslr_work_tree = getenv("GITBSLR_WORK_TREE");
+		if (gitbslr_work_tree)
+		{
+			gitpath.set_work_tree(gitbslr_work_tree);
+			DEBUG("GitBSLR: Using work tree %s (from env)\n", gitbslr_work_tree);
+			setenv("GIT_WORK_TREE", gitbslr_work_tree, true);
+		}
+		else if (getenv("GIT_WORK_TREE"))
+			FATAL("GitBSLR: use GITBSLR_WORK_TREE, not GIT_WORK_TREE\n");
+		
+		const char * gitbslr_git_dir = getenv("GITBSLR_GIT_DIR");
+		if (gitbslr_git_dir)
+		{
+			gitpath.set_git_dir(gitbslr_git_dir);
+			DEBUG("GitBSLR: Using git dir %s (from env)\n", gitbslr_git_dir);
+			setenv("GIT_DIR", gitbslr_git_dir, true);
+		}
+		else if (getenv("GIT_DIR"))
+			FATAL("GitBSLR: use GITBSLR_GIT_DIR, not GIT_DIR\n");
+		
+	}
+};
+static gitbslr g_gitbslr;
+
+static path_handler& gitpath = g_gitbslr.gitpath;
 
 
 static int stat_3264(const char * path, struct stat* buf)
