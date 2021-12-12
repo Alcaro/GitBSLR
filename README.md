@@ -14,13 +14,13 @@ Things that don't work, or aren't tested:
 - GitBSLR does not work natively on Windows or OSX. (It may work in WSL and Cygwin - not tested.)
 - GitBSLR is only tested on Linux, though I'd expect it to work on most other Unix-likes.
 - GitBSLR is only tested with glibc, though I'd expect it to work on most libcs.
-- --work-tree, --git-dir and similar don't work. Use GITBSLR_GIT_DIR and GITBSLR_WORK_TREE instead.
+- --work-tree, --git-dir and similar don't work. Use the GITBSLR_GIT_DIR and GITBSLR_WORK_TREE environment variables instead.
 
 To enable GitBSLR on your machine:
-1. Install your favorite Linux flavor (or other Unix-like environment, if you're feeling lucky)
+1. Install your favorite Linux distro (or other Unix-like environment, if you're feeling lucky)
 2. Install make and a C++ compiler; only tested with GNU make and g++, but others will probably work (if not, report the bug)
 3. Compile GitBSLR with 'make', or 'make OPT=1' to enable my recommended optimizations, or 'make CFLAGS=-O3 LFLAGS=-s' if you want your own flags
-4. Run GitBSLR's test suite, with 'make test'; GitBSLR makes many guesses regarding implementation details, and may yield subtle breakage or security holes if it guesses wrong
+4. Run GitBSLR's test suite, with 'make test'; GitBSLR makes many guesses about implementation details of Git and libc, and may yield subtle breakage or security holes if it guesses wrong
 5. Add a wrapper script in your PATH that sets LD_PRELOAD=/path/to/gitbslr.so, then execs the real Git
 
 install.sh will do steps 3 and 5 for you, but not 1, 2 or 4.
