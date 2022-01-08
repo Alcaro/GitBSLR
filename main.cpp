@@ -594,7 +594,7 @@ public:
 			
 			iter = next;
 			
-			if (!*iter)
+			if (iter[0] == '\0' || (iter[0] == '/' && iter[1] == '\0'))
 			{
 				if (!target_is_in_repo) return ""; // if it'd point outside the repo, it's not a link
 				if (link_force_inline(path)) return ""; // if GITBSLR_FOLLOW says inline, it's not a link
