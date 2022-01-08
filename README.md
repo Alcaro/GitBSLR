@@ -9,11 +9,10 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed, symlink
 
 Things that don't work, or aren't tested:
 - If someone checked in a symlink to outside the repo, GitBSLR will refuse to clone it. This is for security reasons; if vanilla Git creates a symlink to /home/username/, and GitBSLR follows it and creates a .bashrc, you would be quite disappointed. This also applies to repositories cloned prior to installing GitBSLR; if you think they may contain inappropriate links, check them before using GitBSLR, or delete and reclone.
-- Interaction with rare Git features, like submodules or the cross-filesystem detector, is untested.
+- Interaction with rarer Git features, like rebase or the cross-filesystem detector, is untested. If you think it should work, submit a PR or issue.
 - Anything complex (links to links, links within links, links to nonexistent files, etc) may yield unexpected results. (If sufficiently complex, it's not even clear what behavior would be expected.)
-- GitBSLR does not work natively on Windows or OSX. (It may work in WSL and Cygwin - not tested.)
-- GitBSLR is only tested on Linux, though I'd expect it to work on most other Unix-likes.
-- GitBSLR is only tested with glibc, though I'd expect it to work on most libcs.
+- GitBSLR is only tested on Linux. Other Unix-likes may work, but are untested; feel free to try. For Windows, use WSL or Cygwin (untested).
+- GitBSLR is only tested with glibc. Other libcs may work, but I've had a few bugs around glibc upgrades, so no promises.
 - --work-tree, --git-dir and similar don't work. Use the GITBSLR_GIT_DIR and GITBSLR_WORK_TREE environment variables instead.
 
 To enable GitBSLR on your machine:

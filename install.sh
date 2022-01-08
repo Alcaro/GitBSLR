@@ -59,15 +59,16 @@ if [ "$(which git)" != $TARGET/git ]; then
     echo "warning: installed to $TARGET/git, but another Git is already in your \$PATH, in front of $TARGET/; fix that to complete the installation"
     ;;
   *)
-    # don't source .profile, it's incompatible with set -u
+    # don't source .profile directly, it's incompatible with set -u
     if [ $CREATED_TARGET = 1 ] && [ $(sh -c ". ~/.profile; which git") = $TARGET/git ]; then
-      echo "Installed GitBSLR to $TARGET/git; run"
+      echo "Installed GitBSLR to $TARGET/git"
+      echo "To complete installation, run"
       echo "  export PATH=\"\$HOME/bin:\$PATH\""
-      echo "or restart your terminal to complete the installation"
+      echo "in all terminals, or restart your login session or computer"
     elif [ TARGET = "$HOME/bin" ]; then
       echo "Installed GitBSLR to $TARGET/git; run"
       echo "  echo 'export PATH=\"\$HOME/bin:\$PATH\"' >> ~/.profile"
-      echo "and restart your terminal to complete the installation"
+      echo "and restart your computer to complete the installation"
     else
       echo "warning: installed GitBSLR to $TARGET/git, but $TARGET/ is not in your PATH; fix that to complete the installation"
     fi
