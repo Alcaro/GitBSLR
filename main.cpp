@@ -786,6 +786,7 @@ DLLEXPORT int lstat(const char * path, struct stat* buf)
 	return inner_lstat("lstat", path, buf);
 }
 
+DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf); // -Wmissing-declarations - we want to override it even on libc mismatch
 DLLEXPORT int __lxstat(int ver, const char * path, struct stat* buf)
 {
 	// according to <http://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/baselib-xstat64-1.html>,
@@ -808,6 +809,7 @@ DLLEXPORT int lstat64(const char * path, struct stat64* buf)
 	return inner_lstat("lstat64", path, buf);
 }
 
+DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf);
 DLLEXPORT int __lxstat64(int ver, const char * path, struct stat64* buf)
 {
 #if HAVE_STAT_VER
