@@ -324,6 +324,20 @@ public:
 	string work_tree;
 	string git_dir;
 	
+	// These are filenames, not paths.
+	string git_config_path_1; // ~/.gitconfig
+	string git_config_path_2; // $XDG_CONFIG_HOME/git/config
+	
+	path_handler()
+	{
+		const char * HOME = getenv("HOME");
+		if (HOME)
+			git_config_path_1 = normalize_path((string)HOME + "/.gitconfig");
+		const char * XDG_CONFIG_HOME = getenv("XDG_CONFIG_HOME");
+		if (XDG_CONFIG_HOME)
+			git_config_path_2 = normalize_path((string)XDG_CONFIG_HOME + "/git/config");
+	}
+	
 	static string append_slash(string path)
 	{
 		if (path.endswith("/")) return path;
@@ -453,6 +467,12 @@ public:
 			return cls_git_dir;
 		if (work_tree && work_tree.startswith(append_slash(path)))
 			return cls_work_tree;
+		if (work_tree && work_tree.startswith(append_slash(path)))
+			return cls_work_tree;
+		if (git_config_path_1 && path == git_config_path_1)
+			return cls_git_dir;
+		if (git_config_path_2 && path == git_config_path_2)
+			return cls_git_dir;
 		if (fatal_unknown)
 		{
 			if (!git_dir || !work_tree)
