@@ -6,6 +6,7 @@
 set -eu
 
 [ -e gitbslr.so ] || make OPT=1 || exit $?
+make test || $?
 
 TARGET="$HOME/bin"
 [ $(id -u) -eq 0 ] && TARGET="/usr/local/bin"

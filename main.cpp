@@ -340,15 +340,15 @@ public:
 	
 	static string append_slash(string path)
 	{
-		if (path.endswith("/")) return path;
+		if (path.endswith("/") || path == "") return path;
 		else return path+"/";
 	}
 	
-	// Removes ./ and ../ components from the path. Does not follow symlinks.
+	// Removes ./ and ../ components, and double slashes, from the path. Does not follow symlinks.
 	static string normalize_path(const string& path)
 	{
 		// fast path for easy cases (can't just look for "/.", that'd hit the slow path for every /.git)
-		if (!path.contains("/..") && !path.contains("/./"))
+		if (!path.contains("/..") && !path.contains("/./") && !path.contains("//"))
 		{
 			if (path == "/.") // I don't think this is a possible input, but better handle it anyways, for completeness
 				return "/";
@@ -361,6 +361,11 @@ public:
 		size_t off_out = 0;
 		while (ret[off_in])
 		{
+			if (ret[off_in] == '/' && ret[off_in+1] == '/')
+			{
+				off_in += 1;
+				continue;
+			}
 			if (ret[off_in] == '/' && ret[off_in+1] == '.')
 			{
 				if (ret[off_in+2] == '/' || ret[off_in+2] == '\0')
@@ -387,11 +392,23 @@ public:
 	}
 	
 	// Input may or may not have slash. Output will not have a slash.
-	string parent_dir(const string& path)
+	static string parent_dir(const string& path)
 	{
 		const char * start = path.c_str();
 		const char * end = (char*)memrchr((void*)path.c_str(), '/', path.length()-1);
 		return string(start, end-start);
+	}
+	
+	// A directory is considered to be inside itself. Don't use . or .. components or double slashes.
+	// Returns false if one path is relative and the other is absolute; this is probably not the desired answer.
+	// A trailing slash will be ignored, on both sides.
+	static bool is_inside(const string& parent, const string& child)
+	{
+		return append_slash(child).startswith(append_slash(parent));
+	}
+	static bool is_same(const string& parent, const string& child)
+	{
+		return append_slash(child) == append_slash(parent);
 	}
 	
 	bool initialized() const { return git_dir && work_tree; }
@@ -449,29 +466,23 @@ public:
 	path_class_t classify(const string& path, bool fatal_unknown) const
 	{
 		if (path[0] != '/')
-			return classify(string::create_usurp(getcwd(NULL, 0)) + "/" + path, fatal_unknown);
+			return classify(normalize_path(string::create_usurp(getcwd(NULL, 0)) + "/" + path), fatal_unknown);
 		
-		if (path.startswith("/usr/share/git-core/"))
+		if (is_inside("/usr/share/git-core/", path))
 			return cls_git_dir;
-		if (git_dir && path.startswith(git_dir))
+		if (git_dir && is_inside(git_dir, path))
 			return cls_git_dir;
-		if (git_dir && path+"/" == git_dir)
-			return cls_git_dir;
-		if (work_tree && path.startswith(work_tree))
-			return cls_work_tree;
-		if (work_tree && path+"/" == work_tree)
+		if (work_tree && is_inside(work_tree, path))
 			return cls_work_tree;
 		// git status in a submodule will lstat the work tree and git dir, and all parents
 		// https://github.com/Alcaro/GitBSLR/issues/16
-		if (git_dir && git_dir.startswith(append_slash(path)))
+		if (git_dir && is_inside(path, git_dir))
 			return cls_git_dir;
-		if (work_tree && work_tree.startswith(append_slash(path)))
+		if (work_tree && is_inside(path, work_tree))
 			return cls_work_tree;
-		if (work_tree && work_tree.startswith(append_slash(path)))
-			return cls_work_tree;
-		if (git_config_path_1 && path == git_config_path_1)
+		if (git_config_path_1 && is_same(path, git_config_path_1))
 			return cls_git_dir;
-		if (git_config_path_2 && path == git_config_path_2)
+		if (git_config_path_2 && is_same(path, git_config_path_2))
 			return cls_git_dir;
 		if (fatal_unknown)
 		{
@@ -499,14 +510,14 @@ public:
 		if (!rules || !*rules) return false;
 		
 		string cwd = string::create_usurp(getcwd(NULL, 0))+"/";
-		if (!cwd.startswith(work_tree))
+		if (!is_inside(work_tree, cwd))
 			FATAL("GitBSLR: current directory %s should be in work tree %s\n", cwd.c_str(), work_tree.c_str());
 		
 		//path is relative to cwd
 		//path_rel is relative to work tree
 		//path_abs is work tree plus path_rel
 		
-		string path_rel = string(cwd.c_str()+work_tree.length(), cwd.length()-work_tree.length()) + path;
+		string path_rel = append_slash(string(cwd.c_str()+work_tree.length(), cwd.length()-work_tree.length())) + path;
 		string path_abs = work_tree + path_rel;
 		
 		bool ret = false; // no matching rule -> default to keeping it as a link
@@ -548,7 +559,7 @@ public:
 	// Any virtual path.
 	//Output:
 	// If that path should refer to a symlink, return what it points to, relative to the presumed link's parent directory.
-	// If it doesn't exist, or shouldn't be a symlink, return a blank string.
+	// If it doesn't exist, or should be a normal file or directory (not a link), return a blank string.
 	//The function may not call lstat or readlink, that'd yield infinite recursion. It may call readlink_o, which is the real readlink.
 	string resolve_symlink(string path) const
 	{
@@ -565,17 +576,15 @@ public:
 		string path_linktarget = readlink_d(path);
 		
 		string root_abs = realpath_d(".");
-		if (root_abs+"/" != work_tree)
+		if (!is_inside(work_tree, root_abs))
 			FATAL("GitBSLR: internal error, attempted symlink check while cwd (%s) != worktree (%s). Please report this bug: " BUG_URL "\n",
 				root_abs.c_str(), work_tree.c_str());
 		
 		string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
 		if (!path_abs) return ""; // nonexistent -> not a symlink
-		if ((path_abs+"/").startswith(git_dir)) return path_linktarget; // git dir -> return truth
-		if (path.startswith("/usr/share/git-core/")) return path_linktarget; // git likes reading some random stuff here, let it
-		if (path == root_abs) return ""; // telling git that work tree is a link won't end well
-		if (path.startswith(work_tree)) // if path is absolute and in work tree, discard work tree prefix and turn it relative
-			path = string(path.c_str() + strlen(root_abs)+1);
+		if (is_inside(git_dir, path_abs)) return path_linktarget; // git dir -> return truth
+		if (is_inside("/usr/share/git-core/", path_abs)) return path_linktarget; // git likes reading some random stuff here, let it
+		if (is_same(path, work_tree)) return ""; // work tree isn't a link
 		
 		if (path[0] == '/')
 			FATAL("GitBSLR: internal error, unexpected absolute path %s. Please report this bug: " BUG_URL "\n", path.c_str());

@@ -11,6 +11,7 @@ make
 rm -rf test/
 [ -e test/ ] && exit 1
 mkdir test/
+echo "Signature: 8a477f597d28d172789f06886806bc55" > test/CACHEDIR.TAG
 
 GIT=/usr/bin/git
 git()

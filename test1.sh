@@ -66,7 +66,7 @@ grep -q 'symlinks = false' .git/config && echo Error: No symlink support
 grep -q 'symlinks = false' .git/config && exit 1
 gitbslr add .
 #this could simply be
-#git commit -m "GitBSLR test"
+#gitbslr commit -m "GitBSLR test"
 #but I want this to ensure https://github.com/Alcaro/GitBSLR/issues/1 doesn't regress
 export EDITOR=../../../../test-dummyeditor.pl
 gitbslr commit

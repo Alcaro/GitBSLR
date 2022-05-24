@@ -51,6 +51,7 @@ test: gitbslr.so
 	sh test4.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test5.sh | tee /dev/stderr | grep -q 'Test passed'
 	sh test6.sh | tee /dev/stderr | grep -q 'Test passed'
+	sh test7.sh | tee /dev/stderr | grep -q 'Test passed'
 	rm -rf test/
 	echo All tests passed
 check: test

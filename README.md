@@ -9,11 +9,12 @@ So I made a LD_PRELOAD-based tool to fix that. With this tool installed, symlink
 
 Things that don't work, or aren't tested:
 - If someone checked in a symlink to outside the repo, GitBSLR will refuse to clone it. This is for security reasons; if vanilla Git creates a symlink to /home/username/, and GitBSLR follows it and creates a .bashrc, you would be quite disappointed. This also applies to repositories cloned prior to installing GitBSLR; if you think they may contain inappropriate links, check them before using GitBSLR, or delete and reclone.
-- Interaction with rarer Git features, like rebase or the cross-filesystem detector, is untested. If you think it should work, submit a PR or issue.
+- Interaction with rarer Git features, like rebase or the cross-filesystem detector, is untested. If you think it should work, submit a PR or issue. Please include complete steps to reproduce, I don't know much about Git.
 - Anything complex (links to links, links within links, links to nonexistent files, etc) may yield unexpected results. (If sufficiently complex, it's not even clear what behavior would be expected.)
-- GitBSLR is only tested on Linux. Other Unix-likes may work, but are untested; feel free to try. For Windows, use WSL or Cygwin (untested).
+- GitBSLR is only tested on Linux. Other Unix-likes may work, but are untested; feel free to try. For Windows, WSL or Cygwin will probably work (though symlinks are rare on Windows).
 - GitBSLR is only tested with glibc. Other libcs may work, but I've had a few bugs around glibc upgrades, so no promises.
-- --work-tree, --git-dir and similar don't work. Use the GITBSLR_GIT_DIR and GITBSLR_WORK_TREE environment variables instead.
+- --work-tree, --git-dir and similar don't work; GitBSLR can't see command line arguments, and will be confused. Use the GITBSLR_GIT_DIR and GITBSLR_WORK_TREE environment variables instead.
+- Performance is not a goal of GitBSLR; I haven't noticed any slowdown, but all repos I've tried it on are too small to notice such stuff. If it's too slow for you, the best solution is to petition upstream Git to add this functionality.
 
 To enable GitBSLR on your machine:
 1. Install your favorite Linux distro (or other Unix-like environment, if you're feeling lucky)
@@ -22,11 +23,11 @@ To enable GitBSLR on your machine:
 4. Run GitBSLR's test suite, with 'make test'; GitBSLR makes many guesses about implementation details of Git and libc, and may yield subtle breakage or security holes if it guesses wrong
 5. Add a wrapper script in your PATH that sets LD_PRELOAD=/path/to/gitbslr.so, then execs the real Git
 
-install.sh will do steps 3 and 5 for you, but not 1, 2 or 4.
+install.sh will do steps 3 to 5 for you, but not 1 or 2.
 
 Configuration: GitBSLR obeys a few environment variables, which can be set per-invocation, or permanently in the wrapper script:
 - GITBSLR_DEBUG
-If set, GitBSLR prints everything it does. If not, GitBSLR emits output only if it's unable to continue (Git trying to create symlinks to outside the repo, bad GitBSLR configuration, or a GitBSLR bug).
+If set, GitBSLR prints everything it does. If not, GitBSLR emits output only if it's unable to continue (for example Git trying to create symlinks to outside the repo, bad GitBSLR configuration, or a GitBSLR bug).
 - GITBSLR_FOLLOW
 A colon-separated list of paths, as seen by Git, optionally prefixed with the absolute path to the repo.
 'path/link' or 'path/link/' will cause 'path/link' to be inlined. If path/link is nonexistent, not a symlink, or is outside the repo, the entry will be silently ignored.
