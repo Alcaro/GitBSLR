@@ -577,7 +577,8 @@ public:
 		
 		string root_abs = realpath_d(".");
 		if (!is_inside(work_tree, root_abs))
-			FATAL("GitBSLR: internal error, attempted symlink check while cwd (%s) != worktree (%s). Please report this bug: " BUG_URL "\n",
+			FATAL("GitBSLR: internal error, attempted symlink check with cwd (%s) outside worktree (%s). "
+				"Please report this bug: " BUG_URL "\n",
 				root_abs.c_str(), work_tree.c_str());
 		
 		string path_abs = realpath_d(path); // if 'path' is a link, this refers to the link target
@@ -585,6 +586,8 @@ public:
 		if (is_inside(git_dir, path_abs)) return path_linktarget; // git dir -> return truth
 		if (is_inside("/usr/share/git-core/", path_abs)) return path_linktarget; // git likes reading some random stuff here, let it
 		if (is_same(path, work_tree)) return ""; // work tree isn't a link
+		if (is_inside(path, work_tree))
+			path = string(path.c_str() + strlen(work_tree)); // unreachable on ubuntu 21.10 and 22.04, but can show up on 16.04
 		
 		if (path[0] == '/')
 			FATAL("GitBSLR: internal error, unexpected absolute path %s. Please report this bug: " BUG_URL "\n", path.c_str());
@@ -693,33 +696,33 @@ public:
 		}
 		
 		lstat_o = (lstat_t)dlsym(RTLD_NEXT, "lstat");
-	#if HAVE_STAT_VER
+#if HAVE_STAT_VER
 		if (!lstat_o)
 		{
 			__lxstat_o = (__lxstat_t)dlsym(RTLD_NEXT, "__lxstat");
 			if (__lxstat_o) lstat_o = lstat_lxstat_wrap;
 		}
-	#endif
+#endif
 		readlink_o = (readlink_t)dlsym(RTLD_NEXT, "readlink");
 		readdir_o = (readdir_t)dlsym(RTLD_NEXT, "readdir");
 		symlink_o = (symlink_t)dlsym(RTLD_NEXT, "symlink");
 		
-	#if HAVE_STAT64
+#if HAVE_STAT64
 		readdir64_o = (readdir64_t)dlsym(RTLD_NEXT, "readdir64");
 		lstat64_o = (lstat64_t)dlsym(RTLD_NEXT, "lstat64");
-	#if HAVE_STAT_VER
+#if HAVE_STAT_VER
 		if (!lstat64_o)
 		{
 			__lxstat64_o = (__lxstat64_t)dlsym(RTLD_NEXT, "__lxstat64");
 			if (__lxstat64_o) lstat64_o = lstat64_lxstat_wrap;
 		}
-	#endif
-	#endif
+#endif
+#endif
 		
 		if (!lstat_o || !readlink_o || !readdir_o || !symlink_o
-	#if HAVE_STAT64
+#if HAVE_STAT64
 			|| !readdir64_o || !lstat64_o
-	#endif
+#endif
 			)
 			FATAL("GitBSLR: couldn't dlsym required symbols (this is a GitBSLR bug, please report it: " BUG_URL ")\n");
 		

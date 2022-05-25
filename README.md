@@ -14,7 +14,7 @@ Things that don't work, or aren't tested:
 - GitBSLR is only tested on Linux. Other Unix-likes may work, but are untested; feel free to try. For Windows, WSL or Cygwin will probably work (though symlinks are rare on Windows).
 - GitBSLR is only tested with glibc. Other libcs may work, but I've had a few bugs around glibc upgrades, so no promises.
 - --work-tree, --git-dir and similar don't work; GitBSLR can't see command line arguments, and will be confused. Use the GITBSLR_GIT_DIR and GITBSLR_WORK_TREE environment variables instead.
-- Performance is not a goal of GitBSLR; I haven't noticed any slowdown, but all repos I've tried it on are too small to notice such stuff. If it's too slow for you, the best solution is to petition upstream Git to add this functionality.
+- Performance is not a goal of GitBSLR; I haven't noticed any slowdown, but I also haven't used GitBSLR on any large repos where performance is relevant. If it's too slow for you, the best solution is to petition upstream Git to add this functionality.
 
 To enable GitBSLR on your machine:
 1. Install your favorite Linux distro (or other Unix-like environment, if you're feeling lucky)
