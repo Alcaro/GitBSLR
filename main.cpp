@@ -585,8 +585,8 @@ public:
 		if (!path_abs) return ""; // nonexistent -> not a symlink
 		if (is_inside(git_dir, path_abs)) return path_linktarget; // git dir -> return truth
 		if (is_inside("/usr/share/git-core/", path_abs)) return path_linktarget; // git likes reading some random stuff here, let it
-		if (is_same(path, work_tree)) return ""; // work tree isn't a link
-		if (is_inside(path, work_tree))
+		if (is_same(work_tree, path)) return ""; // work tree isn't a link
+		if (is_inside(work_tree, path))
 			path = string(path.c_str() + strlen(work_tree)); // unreachable on ubuntu 21.10 and 22.04, but can show up on 16.04
 		
 		if (path[0] == '/')
