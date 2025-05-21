@@ -1,3 +1,5 @@
+<h1>Moved to https://git.disroot.org/Sir_Walrus/GitBSLR</h1>
+
 GitBSLR - make Git follow symlinks
 ========
 
